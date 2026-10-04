@@ -90,3 +90,7 @@ Format: `date | decision | reason`. One line each. Newest at the bottom.
 2026-10-04 | Same rule on the device side: `clockin-core` `is_still_due` / `AlarmEvent::still_due(plan, marks)` (replaces `without_marked`) keep an alarm only if the current plan has the same id and `fires_at` and no mark suppresses it. Windows re-rings (Phase 4) use it; Android (Phase 5) sends `fires_at` with each id to `check_alarm` | Without it, a block deleted, moved or turned into a day off during the silent gap would still re-ring (SPEC §7.2)
 2026-10-04 | Phase 4/5 note: "already fired" / "stopped" state on a device is keyed by `(item_id, fires_at)` | A block moved later after its old time already rang must still ring at the new time
 2026-10-04 | "Problems history" recorded in `docs/IDEAS.md` as a v1.1 proposal, not built in v1 | SPEC §10 puts history screens out of scope. Phase 2+ must not design around it, but must note in DECISIONS any choice that would make it much harder to add later
+
+## Phase 2 — Backend and sync (local session, 2026-10-05)
+
+2026-10-05 | Laptop tool versions: Windows 11 Home 10.0.26200, git 2.55.0, gh 2.102.0 (authenticated), rustup 1.29.1, rustc/cargo 1.99.0 MSVC (from `rust-toolchain.toml`), Node 24.19.0, pnpm 10.28.0 | First local session check (CLAUDE.md); nothing missing
