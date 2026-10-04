@@ -323,13 +323,11 @@ mod tests {
             let expected = wav_bytes(&samples);
             assert_eq!(committed.len(), expected.len(), "{name}");
             assert_eq!(committed[..44], expected[..44], "{name} header");
-            for (i, (c, e)) in committed[44..]
-                .chunks_exact(2)
-                .zip(expected[44..].chunks_exact(2))
-                .enumerate()
-            {
-                let c = i16::from_le_bytes([c[0], c[1]]);
-                let e = i16::from_le_bytes([e[0], e[1]]);
+            let (committed_samples, _) = committed[44..].as_chunks::<2>();
+            let (expected_samples, _) = expected[44..].as_chunks::<2>();
+            for (i, (c, e)) in committed_samples.iter().zip(expected_samples).enumerate() {
+                let c = i16::from_le_bytes(*c);
+                let e = i16::from_le_bytes(*e);
                 assert!(
                     (i32::from(c) - i32::from(e)).abs() <= 1,
                     "{name} sample {i}: {c} vs {e}"
