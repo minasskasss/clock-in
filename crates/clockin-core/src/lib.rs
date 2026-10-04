@@ -51,8 +51,8 @@ pub use shop_time::{
     shop_time_zone,
 };
 pub use sync::{
-    HORIZON_WARNING_BELOW, MAX_CLOCK_SKEW, PLAN_REFRESH_BELOW, clock_skew_exceeded, horizon_short,
-    plan_needs_refresh,
+    HORIZON_WARNING_BELOW, MAX_CLOCK_SKEW, PLAN_REFRESH_BELOW, POLL_INTERVAL, clock_skew_exceeded,
+    horizon_short, plan_needs_refresh, sync_retry_delay,
 };
 pub use today::{RowStatus, TodayRow, TodayView, has_mark, today_view};
 pub use validate::{
