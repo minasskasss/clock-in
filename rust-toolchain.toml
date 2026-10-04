@@ -1,0 +1,8 @@
+# Pins the Rust toolchain for local builds (Linux cloud VM, Windows laptop)
+# and both CI jobs. No `targets`/host triple: each machine uses its own host,
+# so Windows keeps the MSVC toolchain. Bump deliberately, then log it in
+# docs/DECISIONS.md.
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
