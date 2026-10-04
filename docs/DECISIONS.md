@@ -54,3 +54,4 @@ Format: `date | decision | reason`. One line each. Newest at the bottom.
 2026-10-04 | `.gitattributes` normalises text to LF (`.ps1` checked out as CRLF) | Same bytes on Windows and Linux, so `cargo fmt --check` and diffs agree
 2026-10-04 | CI uploads the Windows debug NSIS installer as an artifact (kept 7 days) | Lets Minas try a build without compiling, if he wants
 2026-10-04 | App icons are Tauri's default placeholders until the Phase 6 polish pass | Not part of any earlier phase
+2026-10-04 | Cloud sessions push to their assigned `claude/...` branch instead of `phase-N-name`; the stop report names the branch to test | The cloud GitHub proxy only allows pushes to the session's assigned branch
