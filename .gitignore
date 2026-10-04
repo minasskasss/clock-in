@@ -1,0 +1,26 @@
+# Secrets: never commit
+.env*
+!.env.example
+*.jks
+*.keystore
+*.pem
+*.p12
+*.pfx
+key.properties
+keystore.properties
+*.key-password*
+*.keypass*
+
+# Build output and dependencies
+target/
+node_modules/
+dist/
+src-tauri/gen/schemas/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log

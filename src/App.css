@@ -1,0 +1,115 @@
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100%;
+  padding: var(--space-5) clamp(var(--space-4), 4vw, var(--space-7));
+}
+
+.app__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.app__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.app__main {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding-block: var(--space-6);
+}
+
+.card {
+  width: min(100%, 720px);
+  padding: clamp(var(--space-5), 4vw, var(--space-7));
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px) saturate(1.1);
+  transition: background-color var(--duration) var(--ease-out);
+}
+
+.card__title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-name);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+.card__body {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.legend {
+  margin-top: var(--space-6);
+}
+
+.legend__title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.legend__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.status-row {
+  position: relative;
+  padding: var(--space-3) var(--space-4);
+  border-left: 6px solid var(--row-edge);
+  border-radius: var(--radius-sm);
+  background: var(--row-bg);
+  color: var(--row-fg);
+  font-weight: 600;
+  transition:
+    background-color var(--duration) var(--ease-out),
+    color var(--duration) var(--ease-out);
+}
+
+.status-row--pending {
+  --row-bg: var(--status-pending-bg);
+  --row-fg: var(--status-pending-fg);
+  --row-edge: var(--status-pending-edge);
+}
+
+.status-row--due {
+  --row-bg: var(--status-due-bg);
+  --row-fg: var(--status-due-fg);
+  --row-edge: var(--status-due-edge);
+}
+
+.status-row--in,
+.status-row--left,
+.status-row--late-out {
+  --row-bg: var(--status-in-bg);
+  --row-fg: var(--status-in-fg);
+  --row-edge: var(--status-in-edge);
+}
+
+.status-row--late-out {
+  --row-edge: var(--status-late-out-edge);
+}
+
+.status-row--left .status-row__label {
+  text-decoration: line-through;
+  text-decoration-color: var(--status-left-line);
+  text-decoration-thickness: 3px;
+}

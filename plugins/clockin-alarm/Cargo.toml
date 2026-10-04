@@ -1,0 +1,18 @@
+[package]
+name = "tauri-plugin-clockin-alarm"
+description = "Clock In alarm plugin (Android AlarmManager bridge). Stub until Phase 5."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "tauri-plugin-clockin-alarm"
+
+[dependencies]
+tauri.workspace = true
+
+[build-dependencies]
+tauri-plugin = { workspace = true, features = ["build"] }
+
+[lints]
+workspace = true
