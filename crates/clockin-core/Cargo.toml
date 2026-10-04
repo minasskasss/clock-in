@@ -10,6 +10,13 @@ publish.workspace = true
 [dependencies]
 jiff.workspace = true
 serde.workspace = true
+sha2 = "0.10"
+unicode-normalization = "0.1.25"
+uuid = { version = "1.27.0", features = ["serde"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+proptest = "1.11.0"

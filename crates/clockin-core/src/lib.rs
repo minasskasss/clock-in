@@ -1,48 +1,61 @@
 //! Pure scheduling and time logic for Clock In.
 //!
 //! This crate does no I/O and never reads the system clock: the current
-//! instant is always passed in by the caller. All times are interpreted in
-//! [`TIME_ZONE_NAME`], whatever the device's own timezone setting is.
+//! instant is always passed in by the caller. All civil dates and times are
+//! Greek local time ([`TIME_ZONE_NAME`]), whatever the device's own timezone
+//! setting is. See `docs/ARCHITECTURE.md` §7.
 //!
-//! The real logic (business day, occurrences, alarm plan, validation) arrives
-//! in Phase 1; see `docs/ARCHITECTURE.md` §7.
+//! - [`business_date_for`]: which business day an instant belongs to.
+//! - [`occurrences`]: concrete blocks of one business date.
+//! - [`today_view`]: the rows and statuses of the main screen.
+//! - [`alarm_plan`]: every alarm in a window, with deterministic ids.
+//! - [`due_events`] / [`next_event`]: alarms grouped by minute, suppressed by marks.
+//! - [`ring_cycle_state`]: the ring 5 min / silent 5 min repeat cycle.
+//! - [`validate_week`] / [`validate_override`]: durations and overlaps.
 
-use jiff::tz::TimeZone;
-
-/// The IANA name of the only timezone the app works in.
-pub const TIME_ZONE_NAME: &str = "Europe/Athens";
-
-/// Returns the shop's timezone (Europe/Athens), from the bundled tz database.
-///
-/// # Panics
-///
-/// Never in practice: the tz database is compiled into the binary
-/// (`jiff` feature `tzdb-bundle-always`), and a unit test checks the lookup.
-#[must_use]
-pub fn shop_time_zone() -> TimeZone {
-    TimeZone::get(TIME_ZONE_NAME).expect("bundled tz database contains Europe/Athens")
-}
+mod business_day;
+mod events;
+mod model;
+mod occurrence;
+mod passphrase;
+mod plan;
+mod ring;
+mod shop_time;
+mod sync;
+mod today;
+mod validate;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use jiff::civil::date;
+mod proptests;
+#[cfg(test)]
+mod test_support;
 
-    #[test]
-    fn bundled_time_zone_is_available() {
-        assert_eq!(shop_time_zone().iana_name(), Some(TIME_ZONE_NAME));
-    }
-
-    #[test]
-    fn athens_offsets_across_2026_fall_back() {
-        let tz = shop_time_zone();
-        // Summer time (EEST, UTC+3) before 2026-10-25, winter time (EET, UTC+2) after.
-        let summer = date(2026, 10, 24)
-            .at(12, 0, 0, 0)
-            .to_zoned(tz.clone())
-            .unwrap();
-        let winter = date(2026, 10, 26).at(12, 0, 0, 0).to_zoned(tz).unwrap();
-        assert_eq!(summer.offset().seconds(), 3 * 3600);
-        assert_eq!(winter.offset().seconds(), 2 * 3600);
-    }
-}
+pub use business_day::{BlockLayout, business_date_for, business_day_start};
+pub use events::{AlarmEvent, Sound, due_events, firing_window, is_suppressed, next_event};
+pub use model::{
+    Mark, MarkKind, Override, OverrideBlock, OverrideKind, ScheduleSettings, Snapshot, Staff,
+    WeeklyBlock, weekday_number,
+};
+pub use occurrence::{Occurrence, occurrences};
+pub use passphrase::{
+    EFF_WORD_COUNT, GENERATED_WORDS, MIN_CHARS as PASSPHRASE_MIN_CHARS,
+    MIN_WORDS as PASSPHRASE_MIN_WORDS, PassphraseError, check_passphrase, eff_word,
+    normalize_passphrase, passphrase_from_indices,
+};
+pub use plan::{MISSED_ALARM_GRACE, PLAN_HORIZON, PlanItem, alarm_plan, item_id, plan_window};
+pub use ring::{RING_DURATION, RingPhase, SILENT_DURATION, ring_cycle_state};
+pub use shop_time::{
+    TIME_ZONE_NAME, floor_to_minute, resolve_local, resolve_local_at, shop_clock, shop_datetime,
+    shop_time_zone,
+};
+pub use sync::{
+    HORIZON_WARNING_BELOW, MAX_CLOCK_SKEW, PLAN_REFRESH_BELOW, clock_skew_exceeded, horizon_short,
+    plan_needs_refresh,
+};
+pub use today::{RowStatus, TodayRow, TodayView, has_mark, today_view};
+pub use validate::{
+    BlockIssue, BlockProblem, DayBlock, MAX_BLOCK_MINUTES, MAX_NAME_CHARS, MAX_OFFSET_MINUTES,
+    MAX_ROLLOVER, MIN_BLOCK_MINUTES, MIN_OFFSET_MINUTES, NameError, OverrideError, SettingsProblem,
+    TimeRange, WeekError, is_valid_quit_code, normalize_name, validate_block, validate_override,
+    validate_settings, validate_week,
+};
