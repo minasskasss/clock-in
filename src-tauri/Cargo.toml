@@ -1,0 +1,28 @@
+[package]
+name = "clock-in"
+description = "Clock In: clock-in / clock-out reminders for the shop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+default-run = "clock-in"
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name (needed on Windows,
+# see https://github.com/rust-lang/cargo/issues/8519).
+name = "clockin_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+clockin-core.workspace = true
+tauri-plugin-clockin-alarm.workspace = true
+tauri.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
