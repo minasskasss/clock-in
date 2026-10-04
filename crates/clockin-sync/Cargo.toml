@@ -1,0 +1,33 @@
+[package]
+name = "clockin-sync"
+description = "Clock In sync client: Supabase RPC client, SQLCipher store and sync loop logic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clockin-core.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid = { version = "1.27.0", features = ["serde", "v4"] }
+thiserror = "2.0.21"
+hex = "0.4.3"
+getrandom = "0.3.4"
+# HTTPS with rustls + ring and Mozilla's root store: no aws-lc build, no
+# platform verifier (which needs JNI setup on Android).
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "http2", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1.0.9"
+# SQLCipher with a vendored OpenSSL, so Windows and Android need no system OpenSSL.
+rusqlite = { version = "0.40.2", features = ["bundled-sqlcipher-vendored-openssl"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
+tokio-postgres = { version = "0.7.18", features = ["with-serde_json-1"] }
+tokio-postgres-rustls = "0.14.0"
+
+[lints]
+workspace = true
