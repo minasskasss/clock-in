@@ -55,3 +55,32 @@ Format: `date | decision | reason`. One line each. Newest at the bottom.
 2026-10-04 | CI uploads the Windows debug NSIS installer as an artifact (kept 7 days) | Lets Minas try a build without compiling, if he wants
 2026-10-04 | App icons are Tauri's default placeholders until the Phase 6 polish pass | Not part of any earlier phase
 2026-10-04 | Cloud sessions push to their assigned `claude/...` branch instead of `phase-N-name`; the stop report names the branch to test | The cloud GitHub proxy only allows pushes to the session's assigned branch
+
+## Phase 1 — Core logic (cloud session, 2026-10-04)
+
+2026-10-04 | Core deps: `uuid` 1 (serde), `sha2` 0.10 (already in the tree via Tauri), `unicode-normalization` 0.1; `proptest` 1 for tests | Small, pure crates; no I/O
+2026-10-04 | Core outputs instants as `jiff::Timestamp` (not `Zoned`); civil times stay `civil::Time`/`Date`; weekday serialised as 1–7 (Mon = 1) | Cheap to compare and serialise; the timezone is always Europe/Athens anyway
+2026-10-04 | DST: a nonexistent wall-clock time moves to the next valid minute (03:30 on 2027-03-28 → 04:00); an ambiguous one takes the first occurrence | SPEC §7.5; applied to block starts, ends and the rollover alike
+2026-10-04 | A business day starts at the *instant* of its rollover (resolved with the same DST rules), and `business_date_for` compares instants | Keeps the business date monotonic even if the rollover falls inside the repeated fall-back hour
+2026-10-04 | Rollover accepts any whole minute 00:00–08:00 in the core; the Settings UI may offer whole hours only | Spec calls it an "hour" but the server stores a `time`; the logic needn't care
+2026-10-04 | Block length (15 min–16 h) and overlaps are checked in wall-clock minutes | Validation must not depend on the date; real length differs by ±1 h only on the two DST nights
+2026-10-04 | "(+1)": shown on a start before the rollover, and on an end strictly after the midnight that closes the business date; an end of exactly 00:00 shows no "(+1)" | "19:00–00:00" reads as "until midnight" (SPEC §4.2 example); 00:00 is midnight, not "after midnight"
+2026-10-04 | Overlap is checked only within one business day, not across neighbouring days | SPEC §4.2 wording; a cross-day clash would need a 16-hour block starting just before rollover
+2026-10-04 | Alarm offsets are applied in real minutes to the block instants | "N minutes before/after" stays true across a DST change
+2026-10-04 | Today-view statuses use block start/end, not the alarm offsets; a never-marked person stays amber after the end | SPEC §3 "past check-in time" / "past end time"
+2026-10-04 | Today-view header shows the business date (not the calendar date) plus the Athens clock | At 01:30 the list shows the previous business day; the header matches it
+2026-10-04 | Ordering ties broken by last name, then first name, accent- and case-insensitive (Greek tonos/dialytika and final sigma folded); ids break any remaining tie | SPEC §6; Latin names sort before Greek ones by code point
+2026-10-04 | Alarm-event names in plan order: time, check-in before check-out, then "First Last" (accent-folded) | Deterministic; matches how the alarm screen lists names
+2026-10-04 | Suppression is literal: only a check-in mark stops a check-in alarm, only a "left" mark stops a check-out alarm | SPEC §7.2; fail loud in odd correction cases
+2026-10-04 | A removed person keeps a block that started before the removal (row and its alarms); later blocks disappear | SPEC §4.1 "from the next block onward"
+2026-10-04 | Phase 2 note: `get_snapshot` must also return staff removed during the snapshot window (not only those with marks), and `schedule_set` should keep the ids of unchanged blocks | Otherwise an in-progress block of a just-removed person vanishes, and editing a schedule mid-shift detaches existing marks (row turns amber again)
+2026-10-04 | Plan item id = first 32 hex chars of SHA-256 of `kind|staff_uuid|block_uuid|YYYY-MM-DD` (lowercase, hyphenated uuids); one value is pinned in a test | ARCHITECTURE §4; changing the format would orphan uploaded plans
+2026-10-04 | Plan window is [now − 15 min, now + 14 days); `horizon_end` = the window end | A device firing a missed alarm up to 15 min late must still find the item in the plan (`check_alarm` treats a missing item as not due)
+2026-10-04 | Missed-alarm window is inclusive: an alarm fires if it is 0–15 min late (15 min 0 s fires, 15 min 1 s doesn't) | SPEC §7.5
+2026-10-04 | Ring cycle: a clock that went backwards counts as the first ring | Never silence an alarm because of a clock change
+2026-10-04 | Override validation: date ≥ today's *business* date; day off has no blocks; replace hours needs ≥ 1 block | SPEC §4.3; an empty replacement is a day off
+2026-10-04 | Names: Unicode NFC, trimmed, 1–40 chars, Greek (incl. polytonic) and Latin (incl. accented) letters, space, hyphen, `'` and `’`; at least one letter | SPEC §4.1; NFC so typed accents count as one character
+2026-10-04 | Passphrase normalising and EFF-list checking live in the core (NFC → lowercase → trim/collapse whitespace; ≥ 5 words, ≥ 20 chars); errors report word positions, never words; "Generate" will pick indices with the OS RNG in Phase 3 | SPEC §4.6, ARCHITECTURE §5.3; testable in one place, nothing secret in errors or logs
+2026-10-04 | Sync time checks (clock skew > 2 min, plan refresh when < 13 days or config changed, horizon banner < 3 days) are core functions | CLAUDE.md: platform layers never do time arithmetic
+2026-10-04 | Sounds: additive synthesis, no samples. Check-in = bell-like C5–E5–G5 arpeggio at −1 dBFS; check-out = rounder G5–C5 at −4 dBFS with a slower attack; 2.0 s, 44.1 kHz 16-bit mono, cosine release to silence for a click-free loop | ARCHITECTURE §11; deterministic, so a test checks the committed WAVs match the generator (±1 LSB for cross-platform float differences)
+2026-10-04 | `proptest-regressions/` is committed | proptest's recommendation: past failures are re-checked on every run
