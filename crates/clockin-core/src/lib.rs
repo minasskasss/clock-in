@@ -31,7 +31,9 @@ mod proptests;
 mod test_support;
 
 pub use business_day::{BlockLayout, business_date_for, business_day_start};
-pub use events::{AlarmEvent, Sound, due_events, firing_window, is_suppressed, next_event};
+pub use events::{
+    AlarmEvent, Sound, due_events, firing_window, is_still_due, is_suppressed, next_event,
+};
 pub use model::{
     Mark, MarkKind, Override, OverrideBlock, OverrideKind, ScheduleSettings, Snapshot, Staff,
     WeeklyBlock, weekday_number,

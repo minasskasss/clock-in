@@ -17,7 +17,7 @@ pub enum RingPhase {
     Ringing { cycle: u32, silent_at: Timestamp },
     /// Sound paused. The next ring (`cycle + 1`) starts at `rering_at`; before
     /// it, the caller drops names already marked
-    /// ([`crate::AlarmEvent::without_marked`]).
+    /// ([`crate::AlarmEvent::still_due`]).
     Silent { cycle: u32, rering_at: Timestamp },
 }
 

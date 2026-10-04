@@ -48,22 +48,20 @@ impl AlarmEvent {
             .collect()
     }
 
-    /// The event without the names already marked, as recomputed before each
-    /// re-ring (SPEC §7.3). `None` when nobody is left: the cycle ends.
+    /// The event recomputed before each re-ring (SPEC §7.3): only the alarms
+    /// that are [`is_still_due`] against the current `plan` and `marks`.
+    /// `None` when nobody is left: the cycle ends.
     #[must_use]
-    pub fn without_marked(&self, marks: &[Mark]) -> Option<Self> {
-        let check_in: Vec<PlanItem> = self
-            .check_in
-            .iter()
-            .filter(|i| !is_suppressed(i, marks))
-            .cloned()
-            .collect();
-        let check_out: Vec<PlanItem> = self
-            .check_out
-            .iter()
-            .filter(|i| !is_suppressed(i, marks))
-            .cloned()
-            .collect();
+    pub fn still_due(&self, plan: &[PlanItem], marks: &[Mark]) -> Option<Self> {
+        let keep = |items: &[PlanItem]| -> Vec<PlanItem> {
+            items
+                .iter()
+                .filter(|i| is_still_due(i, plan, marks))
+                .cloned()
+                .collect()
+        };
+        let check_in = keep(&self.check_in);
+        let check_out = keep(&self.check_out);
         if check_in.is_empty() && check_out.is_empty() {
             None
         } else {
@@ -74,6 +72,21 @@ impl AlarmEvent {
             })
         }
     }
+}
+
+/// Whether an alarm a device is about to ring (or re-ring) should still ring:
+///
+/// - the current `plan` holds an item with the same `item_id` **and the same
+///   `fires_at`** (ids don't include the time, so a block whose time was edited
+///   keeps its id; the old time must not ring), and
+/// - no mark suppresses it ([`is_suppressed`]).
+///
+/// This is the same rule the server's `check_alarm` applies (ARCHITECTURE §6).
+#[must_use]
+pub fn is_still_due(item: &PlanItem, plan: &[PlanItem], marks: &[Mark]) -> bool {
+    plan.iter()
+        .any(|p| p.item_id == item.item_id && p.fires_at == item.fires_at)
+        && !is_suppressed(item, marks)
 }
 
 /// Whether a mark already makes this alarm unnecessary:
@@ -368,18 +381,67 @@ mod tests {
     #[test]
     fn re_ring_drops_marked_names_and_ends_when_none_are_left() {
         let mut snap = snapshot();
+        let p = plan(&snap);
         let noon = athens(MONDAY, 12, 0);
-        let event = due_events(&plan(&snap), &snap.marks, noon, noon).remove(0);
+        let event = due_events(&p, &snap.marks, noon, noon).remove(0);
+        assert_eq!(event.still_due(&p, &snap.marks).as_ref(), Some(&event));
 
         snap.marks.push(mark(100, 2, 20, MONDAY, MarkKind::In));
-        let left = event.without_marked(&snap.marks).unwrap();
+        let left = event.still_due(&p, &snap.marks).unwrap();
         assert!(left.check_in.is_empty());
         assert_eq!(left.check_out.len(), 2);
         assert_eq!(left.sound(), Sound::CheckOut);
 
         snap.marks.push(mark(101, 3, 30, MONDAY, MarkKind::Out));
         snap.marks.push(mark(102, 4, 40, MONDAY, MarkKind::Out));
-        assert_eq!(event.without_marked(&snap.marks), None);
+        assert_eq!(event.still_due(&p, &snap.marks), None);
+    }
+
+    #[test]
+    fn edited_block_time_keeps_its_id_but_the_old_time_no_longer_rings() {
+        // Christos 08:00–12:00 is moved to 08:30–12:00, keeping its block id
+        // (Phase 2 `schedule_set` keeps ids of edited blocks).
+        let mut snap = snapshot();
+        let old_plan = plan(&snap);
+        let eight = athens(MONDAY, 8, 0);
+        let event = due_events(&old_plan, &snap.marks, eight, eight).remove(0);
+        let stale = event.check_in[0].clone();
+
+        for b in &mut snap.blocks {
+            if b.id == id(30) {
+                b.start = jiff::civil::time(8, 30, 0, 0);
+            }
+        }
+        let new_plan = plan(&snap);
+        let moved = new_plan
+            .iter()
+            .find(|i| i.item_id == stale.item_id)
+            .expect("same id after the edit");
+        assert_eq!(moved.fires_at, athens(MONDAY, 8, 30));
+
+        // The 08:00 alarm (stale device, or a re-ring) must not ring…
+        assert!(!is_still_due(&stale, &new_plan, &snap.marks));
+        assert_eq!(event.still_due(&new_plan, &snap.marks), None);
+        // …and the 08:30 one does.
+        assert!(is_still_due(moved, &new_plan, &snap.marks));
+    }
+
+    #[test]
+    fn re_ring_drops_alarms_removed_by_a_schedule_change() {
+        // During the silent gap, Babis's lunch block is deleted and Dimitra
+        // gets a day off: only Christos is left in the 12:00 event.
+        let mut snap = snapshot();
+        let noon = athens(MONDAY, 12, 0);
+        let event = due_events(&plan(&snap), &snap.marks, noon, noon).remove(0);
+
+        snap.blocks.retain(|b| b.id != id(20));
+        snap.overrides.push(day_off(90, &snap.staff[3], MONDAY));
+        let left = event.still_due(&plan(&snap), &snap.marks).unwrap();
+        assert!(left.check_in.is_empty());
+        assert_eq!(names(&left.check_out), ["Christos Gamma"]);
+
+        // An empty plan (e.g. everyone removed) ends the cycle.
+        assert_eq!(event.still_due(&[], &snap.marks), None);
     }
 
     #[test]
