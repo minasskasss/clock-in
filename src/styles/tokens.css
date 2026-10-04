@@ -1,0 +1,118 @@
+/*
+ * Theme tokens. Light and dark each have their own palette (SPEC §3:
+ * calm, warm, polished). `data-theme` on <html> is set by src/theme/theme.ts;
+ * before that runs, the media query below picks the system theme so there is
+ * no flash of the wrong palette.
+ */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #f6efe6;
+  --surface: rgb(255 252 247 / 0.72);
+  --surface-strong: rgb(255 252 247 / 0.92);
+  --surface-border: rgb(120 84 52 / 0.14);
+  --shadow: 0 1px 2px rgb(80 50 25 / 0.06), 0 12px 32px -12px rgb(80 50 25 / 0.18);
+
+  /* Text */
+  --text: #2a211b;
+  --text-muted: #6e6056;
+  --accent: #c2552f;
+  --accent-contrast: #fffaf4;
+  --focus-ring: #c2552f;
+
+  /* Atmospheric background */
+  --blob-1: #f2a27e; /* terracotta */
+  --blob-2: #f4cf7c; /* saffron */
+  --blob-3: #b7cda0; /* basil */
+  --blob-4: #e9b7a8; /* rose clay */
+  --blob-opacity: 0.55;
+  --grain-opacity: 0.07;
+
+  /* Status colours (SPEC §3) */
+  --status-pending-bg: rgb(255 252 247 / 0.78);
+  --status-pending-fg: #2a211b;
+  --status-pending-edge: #b4a597;
+  --status-due-bg: #fdecc8;
+  --status-due-fg: #5a3a05;
+  --status-due-edge: #e09a14;
+  --status-in-bg: #dcefd9;
+  --status-in-fg: #173d1d;
+  --status-in-edge: #3f9a4f;
+  --status-left-line: #d0342c;
+  --status-late-out-edge: #e09a14;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #17120f;
+  --surface: rgb(38 30 25 / 0.66);
+  --surface-strong: rgb(42 33 28 / 0.92);
+  --surface-border: rgb(255 228 200 / 0.1);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -16px rgb(0 0 0 / 0.6);
+
+  --text: #f4ebe1;
+  --text-muted: #b9a999;
+  --accent: #f08a5d;
+  --accent-contrast: #1c1410;
+  --focus-ring: #f4a27e;
+
+  --blob-1: #8a3a22; /* ember */
+  --blob-2: #6b4a14; /* toasted saffron */
+  --blob-3: #34452b; /* olive */
+  --blob-4: #4b2a3a; /* wine */
+  --blob-opacity: 0.6;
+  --grain-opacity: 0.09;
+
+  --status-pending-bg: rgb(42 33 28 / 0.8);
+  --status-pending-fg: #f4ebe1;
+  --status-pending-edge: #6f6157;
+  --status-due-bg: #4a3610;
+  --status-due-fg: #ffe2a6;
+  --status-due-edge: #f0b03a;
+  --status-in-bg: #1f3a24;
+  --status-in-fg: #d4f2d6;
+  --status-in-edge: #5cc06d;
+  --status-left-line: #ff6b5e;
+  --status-late-out-edge: #f0b03a;
+}
+
+:root {
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* System fonts with full Greek coverage (Segoe UI on Windows, Roboto on Android). No web fonts. */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", Roboto, "Noto Sans", system-ui, -apple-system, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", Roboto, "Noto Sans", system-ui, sans-serif;
+
+  /* Large names readable from about 2 m away on the shop PC (SPEC §3). */
+  --text-name: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem);
+  --text-title: clamp(1.5rem, 1.1rem + 1.2vw, 2.1rem);
+  --text-body: 1.0625rem;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration: 0ms;
+  }
+}
