@@ -200,16 +200,10 @@ impl<B: SyncBackend> SyncEngine<B> {
     ///
     /// If the queue can't be read.
     pub fn core_snapshot(&self) -> Result<Option<Snapshot>, StoreError> {
-        let Some(cached) = &self.cached else {
-            return Ok(None);
-        };
-        let pending: Vec<_> = self
-            .store
-            .pending_marks()?
-            .iter()
-            .map(MarkRequest::core)
-            .collect();
-        Ok(Some(cached.snapshot.core_snapshot(&pending)))
+        self.cached
+            .as_ref()
+            .map(|c| core_snapshot_with_pending(&c.snapshot, &self.store))
+            .transpose()
     }
 
     #[must_use]
@@ -242,26 +236,17 @@ impl<B: SyncBackend> SyncEngine<B> {
         kind: MarkKind,
         now: Timestamp,
     ) -> Result<Uuid, StoreError> {
-        if let Some(snapshot) = self.core_snapshot()?
-            && let Some(existing) = snapshot.marks.iter().find(|m| {
-                m.staff_id == staff_id
-                    && m.source_block_id == source_block_id
-                    && m.business_date == business_date
-                    && m.kind == kind
-            })
-        {
-            return Ok(existing.id);
-        }
-        let mark = MarkRequest {
-            client_id: Uuid::new_v4(),
+        let id = queue_mark(
+            &self.store,
+            self.cached.as_ref().map(|c| &c.snapshot),
             staff_id,
             source_block_id,
             business_date,
             kind,
-        };
-        self.store.queue_mark(&mark, now)?;
+            now,
+        )?;
         self.status.pending_marks = self.store.pending_marks()?.len();
-        Ok(mark.client_id)
+        Ok(id)
     }
 
     /// One round of sync. Server problems never fail the tick: they show in
@@ -272,7 +257,10 @@ impl<B: SyncBackend> SyncEngine<B> {
     ///
     /// Only for local database errors.
     pub async fn tick(&mut self, now: Timestamp) -> Result<TickReport, StoreError> {
-        match self.contact(now).await {
+        let result = self.contact(now).await;
+        // Another connection (the UI's) may queue marks too.
+        self.status.pending_marks = self.store.pending_marks()?.len();
+        match result {
             Ok(data_changed) => {
                 self.status.online = true;
                 self.status.paired = true;
@@ -419,6 +407,70 @@ impl<B: SyncBackend> SyncEngine<B> {
         // Still conflicting: someone keeps editing. The next tick tries again.
         Ok(())
     }
+}
+
+/// The core's view of `snapshot` plus the marks still queued in `store`.
+///
+/// # Errors
+///
+/// If the queue can't be read.
+pub fn core_snapshot_with_pending(
+    snapshot: &ServerSnapshot,
+    store: &Store,
+) -> Result<Snapshot, StoreError> {
+    let pending: Vec<_> = store
+        .pending_marks()?
+        .iter()
+        .map(MarkRequest::core)
+        .collect();
+    Ok(snapshot.core_snapshot(&pending))
+}
+
+/// Queues a check-in or check-out in `store`; the next sync tick sends it.
+/// If `snapshot` or the queue already has a mark of this kind for that block
+/// occurrence, returns its id and queues nothing.
+///
+/// The UI calls this on its own connection to the store, so a tap never
+/// waits for a sync round that is talking to a slow server.
+///
+/// # Errors
+///
+/// If the queue can't be read or written.
+pub fn queue_mark(
+    store: &Store,
+    snapshot: Option<&ServerSnapshot>,
+    staff_id: Uuid,
+    source_block_id: Uuid,
+    business_date: Date,
+    kind: MarkKind,
+    now: Timestamp,
+) -> Result<Uuid, StoreError> {
+    let pending = store.pending_marks()?;
+    let same = |s: Uuid, b: Uuid, d: Date, k: MarkKind| {
+        s == staff_id && b == source_block_id && d == business_date && k == kind
+    };
+    if let Some(existing) = snapshot
+        .into_iter()
+        .flat_map(|s| s.marks.iter())
+        .find(|m| same(m.staff_id, m.source_block_id, m.business_date, m.kind))
+    {
+        return Ok(existing.id);
+    }
+    if let Some(existing) = pending
+        .iter()
+        .find(|m| same(m.staff_id, m.source_block_id, m.business_date, m.kind))
+    {
+        return Ok(existing.client_id);
+    }
+    let mark = MarkRequest {
+        client_id: Uuid::new_v4(),
+        staff_id,
+        source_block_id,
+        business_date,
+        kind,
+    };
+    store.queue_mark(&mark, now)?;
+    Ok(mark.client_id)
 }
 
 #[cfg(test)]
@@ -793,6 +845,44 @@ mod tests {
         assert_eq!(e.status().pending_marks, 1);
         assert_eq!(e.core_snapshot().unwrap().unwrap().marks.len(), 1);
         drop(e);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn marks_queued_on_another_connection_are_flushed() {
+        let key = StoreKey::generate().unwrap();
+        let dir = std::env::temp_dir().join(format!("clockin-engine-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("local.db");
+        let store = Store::open(&path, &key).unwrap();
+        let mut e =
+            SyncEngine::new(FakeBackend::new(), store, DeviceSecret::new("s".into())).unwrap();
+        block_on(e.tick(now())).unwrap();
+
+        let ui = Store::open(&path, &key).unwrap();
+        let day = date(2026, 10, 5);
+        let id = queue_mark(&ui, e.snapshot(), STAFF, BLOCK, day, MarkKind::In, now()).unwrap();
+        // The UI sees it at once, and queuing it again is a no-op.
+        let snap = core_snapshot_with_pending(e.snapshot().unwrap(), &ui).unwrap();
+        assert_eq!(snap.marks.len(), 1);
+        assert_eq!(
+            queue_mark(&ui, e.snapshot(), STAFF, BLOCK, day, MarkKind::In, now()).unwrap(),
+            id
+        );
+        assert_eq!(ui.pending_marks().unwrap().len(), 1);
+
+        let report = block_on(e.tick(now() + secs(1))).unwrap();
+        assert!(report.data_changed);
+        assert_eq!(e.status().pending_marks, 0);
+        assert!(ui.pending_marks().unwrap().is_empty());
+        e.backend()
+            .with(|s| assert_eq!(s.received_marks[0].client_id, id));
+        // Now the server has it: still the same id.
+        assert_eq!(
+            queue_mark(&ui, e.snapshot(), STAFF, BLOCK, day, MarkKind::In, now()).unwrap(),
+            id
+        );
+        drop((e, ui));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -13,6 +13,7 @@
 //! - [`ring_cycle_state`]: the ring 5 min / silent 5 min repeat cycle.
 //! - [`validate_week`] / [`validate_override`]: durations and overlaps.
 
+mod admin;
 mod business_day;
 mod events;
 mod model;
@@ -30,6 +31,10 @@ mod proptests;
 #[cfg(test)]
 mod test_support;
 
+pub use admin::{
+    ADMIN_IDLE_TIMEOUT, admin_idle_expired, clock_offset_to, lockout_until, offset_now,
+    seconds_until,
+};
 pub use business_day::{BlockLayout, business_date_for, business_day_start};
 pub use events::{
     AlarmEvent, Sound, due_events, firing_window, is_still_due, is_suppressed, next_event,
