@@ -11,6 +11,9 @@ keystore.properties
 *.key-password*
 *.keypass*
 
+# Supabase CLI working files (may hold project details)
+supabase/.temp/
+
 # Build output and dependencies
 target/
 node_modules/
