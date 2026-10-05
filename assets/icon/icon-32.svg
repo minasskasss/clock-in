@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<!-- Hand-tuned 32 px layer: Start pins at 100 %, title bar at 200 %. -->
+  <circle cx="16" cy="16" r="16" fill="#d98a2b"/>
+  <circle cx="16" cy="16" r="12" fill="#fff1d2"/>
+  <g fill="#b23a22"><circle cx="9" cy="9" r="2"/><circle cx="16.5" cy="6" r="1.5"/><circle cx="23" cy="23" r="2"/></g>
+  <polyline points="8.5,16 13,20.5 23.5,10" fill="none" stroke="#7e2a16" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

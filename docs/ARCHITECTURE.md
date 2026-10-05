@@ -65,9 +65,11 @@ C:\dev\clock-in\
   plugins/clockin-alarm/       Tauri plugin: Rust side + android/ (Kotlin)
   supabase/migrations/         SQL migrations (schema, functions, grants, cron)
   assets/sounds/               generated check-in / check-out WAVs
+  assets/icon/                 app icon sources (SVG): full design, hand-tuned 16/20/24/32/48 px, Android adaptive parts, icons.json
   assets/eff_large_wordlist.txt   (downloaded in Phase 0, SHA-256 recorded in DECISIONS)
   tools/gen-sounds/            small Rust bin that synthesises the sounds
   tools/generate-passphrase.ps1
+  tools/build-icons.mjs        `pnpm icons`: every icon in src-tauri/icons from assets/icon (tauri icon + an .ico with the tuned layers)
   .env.example                 SUPABASE_URL=, SUPABASE_PUBLISHABLE_KEY=   (committed, empty values)
   .env.dev / .env.prod         real values (gitignored)
 ```

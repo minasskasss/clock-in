@@ -11,7 +11,8 @@
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "icons": "node tools/build-icons.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",

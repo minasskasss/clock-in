@@ -13,6 +13,8 @@ use std::path::Path;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=CLOCKIN_ENV");
+    // tauri-build embeds this into the .exe but doesn't watch it (`pnpm icons`).
+    println!("cargo:rerun-if-changed=icons/icon.ico");
     let profile = std::env::var("PROFILE").unwrap_or_default();
     let env = std::env::var("CLOCKIN_ENV")
         .ok()

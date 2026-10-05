@@ -20,12 +20,44 @@
   gap: var(--space-3);
 }
 
-.app__title {
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+/* Header mark (src/components/Brand.tsx): icon, wordmark, subtitle. */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand__icon {
+  flex: none;
+}
+
+.brand__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand__name {
+  display: block;
+  fill: var(--text);
+}
+
+.brand__subtitle {
+  padding-left: 3px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
   color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Narrow windows: the name stays, the subtitle goes. */
+@media (max-width: 560px) {
+  .brand__subtitle {
+    display: none;
+  }
 }
 
 .env-badge {

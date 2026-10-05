@@ -15,6 +15,8 @@ mod profile;
 mod secrets;
 mod state;
 mod views;
+#[cfg(windows)]
+mod window_icon;
 
 use crate::profile::Profile;
 use crate::secrets::PlatformSecrets;
@@ -57,7 +59,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         // Its own webview data (language, theme) next to its own database.
         window = window.data_directory(data_dir.join("webview"));
     }
-    window.build()?;
+    let _window = window.build()?;
+    #[cfg(windows)]
+    window_icon::apply(_window.hwnd()?.0, _window.scale_factor()?);
     Ok(())
 }
 
@@ -71,6 +75,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clockin_alarm::init())
         .setup(setup)
+        .on_window_event(|_window, _event| {
+            #[cfg(windows)]
+            if let tauri::WindowEvent::ScaleFactorChanged { scale_factor, .. } = _event
+                && let Ok(hwnd) = _window.hwnd()
+            {
+                window_icon::apply(hwnd.0, *scale_factor);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_state,
             commands::check_new_passphrase,

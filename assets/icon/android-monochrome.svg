@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+<!-- Android themed (monochrome) icon: one colour, pepperoni and tick as cut-outs. -->
+  <defs>  <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="108" height="108">
+    <circle cx="54" cy="54" r="29" fill="#fff"/>
+    <circle cx="54" cy="54" r="24.5" fill="none" stroke="#000" stroke-width="2.2"/>
+    <g stroke="#000" stroke-width="2.4" stroke-linecap="round"><line x1="54" y1="39" x2="54" y2="32.5"/><line x1="64.61" y1="43.39" x2="69.2" y2="38.8"/><line x1="69" y1="54" x2="75.5" y2="54"/><line x1="64.61" y1="64.61" x2="69.2" y2="69.2"/><line x1="54" y1="69" x2="54" y2="75.5"/><line x1="43.39" y1="64.61" x2="38.8" y2="69.2"/><line x1="39" y1="54" x2="32.5" y2="54"/><line x1="43.39" y1="43.39" x2="38.8" y2="38.8"/></g>
+    <g fill="#000"><circle cx="71.15" cy="60.93" r="4"/><circle cx="47.07" cy="71.15" r="4"/><circle cx="36.85" cy="47.07" r="4"/></g>
+    <polyline points="45.91,52.05 54,56 63.96,44.13" fill="none" stroke="#000" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </mask></defs>
+  <rect width="108" height="108" fill="#000" mask="url(#cut)"/>
+</svg>

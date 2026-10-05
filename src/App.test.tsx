@@ -17,6 +17,17 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Ρυθμίσεις" })).not.toBeInTheDocument();
   });
 
+  it("shows the header mark: icon, the drawn «Clock In» and the Greek subtitle", async () => {
+    mockCommands({ app_state: appState({ today: { businessDate: "2026-10-05", clock: "11:42", rows: [] } }) });
+    const { container } = render(<App />);
+    const name = await screen.findByRole("img", { name: "Clock In" });
+    expect(name.tagName.toLowerCase()).toBe("svg");
+    expect(name.querySelector("path")?.getAttribute("d")).toMatch(/^M/);
+    expect(screen.getByText("ΠΡΟΣΕΛΕΥΣΗ · ΑΠΟΧΩΡΗΣΗ")).toBeInTheDocument();
+    // The icon is decoration next to the name.
+    expect(container.querySelector(".brand__icon")).toHaveAttribute("alt", "");
+  });
+
   it("explains a build without server settings", async () => {
     mockCommands({ app_state: appState({ phase: "not_configured", today: null }) });
     render(<App />);

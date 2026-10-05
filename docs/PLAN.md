@@ -123,6 +123,7 @@ Then build:
 
 - Everything in ARCHITECTURE §9: scheduler, alarm window, sounds, repeat cycle, tray, quit-code keypad, autostart, single instance, keep-awake, mute banner, clock-skew banner, missed-alarm rule.
 - NSIS installer.
+- Tray icon: the hand-tuned small layer of `icon.ico` at 16 px × the display scale (`tauri::image::Image::from_app_icon_resource`), not the 512 px design shrunk (DECISIONS, Phase 3 icon).
 
 ⛔ **Needs Minas (end of phase): SETUP §5, Supabase prod project.** When he's done:
 
@@ -162,6 +163,7 @@ Then build:
 - the full Kotlin plugin from ARCHITECTURE §10;
 - onboarding checklist;
 - per-device alert-mode setting;
+- app icon: copy `src-tauri/icons/android/` (made by `pnpm icons`: adaptive foreground and background, themed monochrome, legacy and round) into the Android project's `res/`;
 - per-device theme, the same as Windows (SPEC §3, §8.2): Αυτόματο by default (the rule comes from `clockin-core`), Σύστημα following Android's dark theme, Φωτεινό, Σκοτεινό; the same static background.
 
 The test phone is paired to **dev** during development.

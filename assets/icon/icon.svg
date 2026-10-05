@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<!-- Clock In app icon, full design (48 px and up). Pizza clock: slice cuts are the hour marks, the hands make a tick. -->
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9693f"/><stop offset="1" stop-color="#b2462a"/></linearGradient></defs>
+  <rect x="37.93" y="37.93" width="948.15" height="948.15" rx="227.56" fill="url(#bg)"/>
+  <circle cx="512" cy="512" r="324.46" fill="#f2b552"/>
+  <circle cx="512" cy="512" r="268.52" fill="#fff1d2"/>
+  <g stroke="#e2a24a" stroke-width="26.85" stroke-linecap="round"><line x1="512" y1="344.18" x2="512" y2="254.67"/><line x1="630.67" y1="393.33" x2="693.96" y2="330.04"/><line x1="679.82" y1="512" x2="769.33" y2="512"/><line x1="630.67" y1="630.67" x2="693.96" y2="693.96"/><line x1="512" y1="679.82" x2="512" y2="769.33"/><line x1="393.33" y1="630.67" x2="330.04" y2="693.96"/><line x1="344.18" y1="512" x2="254.67" y2="512"/><line x1="393.33" y1="393.33" x2="330.04" y2="330.04"/></g>
+  <g fill="#b23a22"><circle cx="703.91" cy="589.54" r="34.68"/><circle cx="434.46" cy="703.91" r="34.68"/><circle cx="320.09" cy="434.46" r="34.68"/></g>
+  <polyline points="421.5,490.24 512,534.38 623.47,401.53" fill="none" stroke="#7e2a16" stroke-width="61.53" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="512" cy="534.38" r="20.14" fill="#7e2a16"/>
+</svg>

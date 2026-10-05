@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import "./App.css";
 import { api } from "./api";
 import { Background } from "./components/Background";
+import { Brand } from "./components/Brand";
 import { FirstRun } from "./components/FirstRun";
 import { QuickMenu } from "./components/QuickMenu";
 import { Today } from "./components/Today";
@@ -66,7 +67,7 @@ export default function App() {
       <div className="app">
         <header className="app__header">
           <div className="app__brand">
-            <span className="app__title">{t("app.name")}</span>
+            <Brand />
             {state?.environment === "dev" && <span className="env-badge">{t("app.devBadge")}</span>}
           </div>
           <div className="app__actions">
