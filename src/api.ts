@@ -44,6 +44,8 @@ export interface Banners {
   lastSync: LocalStamp | null;
   clockSkew: boolean;
   horizonShort: boolean;
+  /** Windows sound output muted, at zero or missing. */
+  soundOff: boolean;
 }
 
 export interface AppStateView {
@@ -57,6 +59,25 @@ export interface AppStateView {
   adminUnlocked: boolean;
   dataVersion: number;
   /** Whether the automatic theme is dark right now (decided in Rust). */
+  autoDark: boolean;
+  /** Whether Quit asks for the quit code (false before one is known). */
+  quitCodeSet: boolean;
+}
+
+/** The alarm window's content (src-tauri/src/alarms.rs). Times are "HH:MM". */
+export interface AlarmView {
+  id: number;
+  at: string;
+  checkIn: string[];
+  checkOut: string[];
+  /** False during the silent part of the cycle. */
+  ringing: boolean;
+  reringAt: string | null;
+}
+
+export interface AlarmStateView {
+  /** Null once the alarm ended (the window is about to close). */
+  alarm: AlarmView | null;
   autoDark: boolean;
 }
 
@@ -238,5 +259,9 @@ export const api = {
   changePassphrase: (current: string, newPassphrase: string) =>
     call<void>("change_passphrase", { current, newPassphrase }),
   generatePassphrase: () => call<string>("generate_passphrase"),
+  alarmState: () => call<AlarmStateView>("alarm_state"),
+  alarmStop: (id: number) => call<void>("alarm_stop", { id }),
+  /** Exits the app if `code` is the quit code; otherwise rejects. */
+  quit: (code: string) => call<void>("quit", { code }),
   debugSetClock: (local: string | null) => call<void>("debug_set_clock", { local }),
 };

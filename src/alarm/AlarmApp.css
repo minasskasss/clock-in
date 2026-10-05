@@ -1,0 +1,107 @@
+/* The alarm window (src/alarm/AlarmApp.tsx): names readable from across the
+   room and one large Stop button. No animation: the sound is the signal. */
+
+.alarm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 100%;
+  padding: var(--space-5) clamp(var(--space-4), 5vw, var(--space-7));
+}
+
+.alarm__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.alarm__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+}
+
+.alarm__time {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3.25rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.alarm__lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.alarm__list {
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--surface-border);
+  border-left: 8px solid var(--status-pending-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+}
+
+.alarm__list--in {
+  border-left-color: var(--status-due-edge);
+}
+
+.alarm__list--out {
+  border-left-color: var(--status-in-edge);
+}
+
+.alarm__list-title {
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.alarm__names {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.alarm__silent {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  font-size: 1.125rem;
+}
+
+.alarm__stop {
+  width: 100%;
+  min-height: 96px;
+  margin-top: auto;
+  border-color: transparent;
+  border-radius: var(--radius-lg);
+  /* The same strong red in both themes, white text at > 6:1 contrast. */
+  background: #b3261e;
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.alarm__note {
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+}

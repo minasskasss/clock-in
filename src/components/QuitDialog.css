@@ -1,0 +1,41 @@
+/* The quit-code keypad (src/components/QuitDialog.tsx). */
+
+.keypad__display {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.keypad__slot {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--input-border);
+  border-radius: 50%;
+}
+
+.keypad__slot--filled {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  width: min(100%, 300px);
+  margin: var(--space-3) auto 0;
+}
+
+.keypad__key {
+  min-height: 64px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The backspace key sits under 7; 0 goes in the middle column. */
+.keypad__key--quiet {
+  border-color: transparent;
+  background: transparent;
+}

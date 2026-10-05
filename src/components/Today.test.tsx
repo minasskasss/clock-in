@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { callsTo, mockCommands, row, today } from "../test/tauri";
 import { Today } from "./Today";
 
-const noBanners = { offline: false, lastSync: null, clockSkew: false, horizonShort: false };
+const noBanners = { offline: false, lastSync: null, clockSkew: false, horizonShort: false, soundOff: false };
 
 describe("Today view", () => {
   it("shows the header, every row with its hours and status, and (+1) after midnight", () => {
@@ -82,12 +82,20 @@ describe("Today view", () => {
     rerender(
       <Today
         today={today()}
-        banners={{ offline: true, lastSync: { date: "2026-10-05", time: "11:20" }, clockSkew: true, horizonShort: true }}
+        banners={{
+          offline: true,
+          lastSync: { date: "2026-10-05", time: "11:20" },
+          clockSkew: true,
+          horizonShort: true,
+          soundOff: true,
+        }}
         onChanged={() => {}}
       />,
     );
     expect(screen.getByText(/Τελευταίος συγχρονισμός: 11:20\./)).toBeInTheDocument();
     expect(screen.getByText(/διαφέρει πάνω από 2 λεπτά/)).toBeInTheDocument();
     expect(screen.getByText(/λιγότερες από 3 μέρες/)).toBeInTheDocument();
+    expect(screen.getByText(/Ο ήχος των Windows είναι κλειστός/)).toBeInTheDocument();
+    expect(screen.getAllByRole("status")).toHaveLength(4);
   });
 });

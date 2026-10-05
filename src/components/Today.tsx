@@ -163,6 +163,7 @@ function Banners({ banners, today }: { banners: BannerState; today: string | nul
         : t("banner.offlineNever"),
     });
   }
+  if (banners.soundOff) items.push({ key: "sound", text: t("banner.soundOff") });
   if (banners.clockSkew) items.push({ key: "skew", text: t("banner.clockSkew") });
   if (banners.horizonShort) items.push({ key: "horizon", text: t("banner.horizonShort") });
   if (items.length === 0) return null;

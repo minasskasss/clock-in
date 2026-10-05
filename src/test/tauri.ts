@@ -61,10 +61,11 @@ export function appState(overrides: Partial<AppStateView> = {}): AppStateView {
     lockoutRemainingS: 0,
     defaultDeviceName: "SHOP-PC",
     today: today(),
-    banners: { offline: false, lastSync: null, clockSkew: false, horizonShort: false },
+    banners: { offline: false, lastSync: null, clockSkew: false, horizonShort: false, soundOff: false },
     adminUnlocked: false,
     dataVersion: 1,
     autoDark: false,
+    quitCodeSet: true,
     ...overrides,
   };
 }
