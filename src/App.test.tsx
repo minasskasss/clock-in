@@ -1,36 +1,67 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import App from "./App";
-import { setLanguage } from "./i18n";
 import { setSystemPrefersDark } from "./test/setup";
+import { appState, callsTo, mockCommands } from "./test/tauri";
 
 describe("App", () => {
-  beforeEach(async () => {
-    await setLanguage("el");
-  });
-
-  it("shows the Greek placeholder by default, with the background", () => {
+  it("shows the Greek first-run choices on an unpaired device, with the background", async () => {
+    mockCommands({ app_state: appState({ phase: "unpaired", today: null }) });
     render(<App />);
-    expect(screen.getByRole("heading", { name: "Σύντομα εδώ: το σημερινό πρόγραμμα" })).toBeInTheDocument();
-    expect(screen.getByText("Ήρθε")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Καλώς ήρθατε στο Clock In" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ρύθμιση ως πρώτη συσκευή/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Σύνδεση αυτής της συσκευής/ })).toBeInTheDocument();
     expect(screen.getByTestId("background")).toHaveAttribute("aria-hidden", "true");
+    // No Settings before pairing.
+    expect(screen.queryByRole("button", { name: "Ρυθμίσεις" })).not.toBeInTheDocument();
   });
 
-  it("switches the placeholder text to English from the menu and back", async () => {
+  it("shows the header mark: icon, the drawn «Clock In» and the Greek subtitle", async () => {
+    mockCommands({ app_state: appState({ today: { businessDate: "2026-10-05", clock: "11:42", rows: [] } }) });
+    const { container } = render(<App />);
+    const name = await screen.findByRole("img", { name: "Clock In" });
+    expect(name.tagName.toLowerCase()).toBe("svg");
+    expect(name.querySelector("path")?.getAttribute("d")).toMatch(/^M/);
+    expect(screen.getByText("ΠΡΟΣΕΛΕΥΣΗ · ΑΠΟΧΩΡΗΣΗ")).toBeInTheDocument();
+    // The icon is decoration next to the name.
+    expect(container.querySelector(".brand__icon")).toHaveAttribute("alt", "");
+  });
+
+  it("explains a build without server settings", async () => {
+    mockCommands({ app_state: appState({ phase: "not_configured", today: null }) });
+    render(<App />);
+    expect(await screen.findByRole("heading", { name: "Λείπουν οι ρυθμίσεις διακομιστή" })).toBeInTheDocument();
+  });
+
+  it("is Greek only: the menu has no language choice", async () => {
+    mockCommands({ app_state: appState({ today: { businessDate: "2026-10-05", clock: "11:42", rows: [] } }) });
     const user = userEvent.setup();
     render(<App />);
-
+    expect(await screen.findByText("Κανείς δεν δουλεύει σήμερα")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Δευτέρα");
     await user.click(screen.getByRole("button", { name: "Μενού" }));
-    await user.click(screen.getByRole("button", { name: "English" }));
-    expect(screen.getByRole("heading", { name: "Coming soon: today's schedule" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Γλώσσα")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /English/ })).not.toBeInTheDocument();
+    for (const name of ["Αυτόματο", "Σύστημα", "Φωτεινό", "Σκοτεινό"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("button", { name: "Αυτόματο" })).toHaveAttribute("aria-pressed", "true");
+  });
 
-    await user.click(screen.getByRole("button", { name: "Ελληνικά" }));
-    expect(screen.getByRole("heading", { name: "Σύντομα εδώ: το σημερινό πρόγραμμα" })).toBeInTheDocument();
+  it("'Αυτόματο' follows Rust's answer live, without a restart", async () => {
+    let autoDark = true;
+    mockCommands({ app_state: () => appState({ autoDark }) });
+    render(<App />);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+    autoDark = false;
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"), { timeout: 2500 });
+    // Remembered, so a restart at night starts dark at once.
+    expect(window.localStorage.getItem("clockin.theme.autoDark")).toBe("light");
   });
 
   it("switches between light and dark from the menu", async () => {
+    mockCommands({ app_state: appState() });
     const user = userEvent.setup();
     render(<App />);
     expect(document.documentElement.dataset.theme).toBe("light");
@@ -45,6 +76,8 @@ describe("App", () => {
   });
 
   it("follows live system theme changes while set to 'System'", () => {
+    window.localStorage.setItem("clockin.theme", "system");
+    mockCommands({ app_state: appState({ autoDark: true }) });
     render(<App />);
     expect(document.documentElement.dataset.theme).toBe("light");
     act(() => setSystemPrefersDark(true));
@@ -52,11 +85,48 @@ describe("App", () => {
   });
 
   it("closes the menu with Escape", async () => {
+    mockCommands({ app_state: appState() });
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("button", { name: "Μενού" }));
     expect(screen.getByRole("button", { name: "Σκοτεινό" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("button", { name: "Σκοτεινό" })).not.toBeInTheDocument();
+  });
+
+  it("shows the fake clock only in debug builds", async () => {
+    const calls = mockCommands({
+      app_state: appState({ debug: { profile: "b", fakeClock: "2026-10-25T03:30" } }),
+      debug_set_clock: null,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("11:42");
+    await user.click(screen.getByRole("button", { name: "Μενού" }));
+    expect(screen.getByText("Προφίλ: b")).toBeInTheDocument();
+    expect(screen.getByText("Ενεργό: 25/10/2026 03:30")).toBeInTheDocument();
+    const box = screen.getByLabelText("Ψεύτικο ρολόι (ώρα Ελλάδας)");
+    expect(box).toHaveValue("25/10/2026 03:30");
+    await user.clear(box);
+    await user.type(box, "05/10/2026 9:00 PM");
+    await user.click(screen.getByRole("button", { name: "Ορισμός" }));
+    expect(screen.getByText("Γράψτε ημερομηνία και ώρα όπως 05/10/2026 21:00.")).toBeInTheDocument();
+    expect(callsTo(calls, "debug_set_clock")).toHaveLength(0);
+    await user.clear(box);
+    await user.type(box, "05/10/2026 21:00");
+    await user.click(screen.getByRole("button", { name: "Ορισμός" }));
+    expect(callsTo(calls, "debug_set_clock")).toEqual([{ local: "2026-10-05T21:00" }]);
+    await user.click(screen.getByRole("button", { name: "Πραγματική ώρα" }));
+    expect(calls.some((c) => c.command === "debug_set_clock" && c.args?.local === null)).toBe(true);
+  });
+
+  it("tells the user when the app core doesn't answer", async () => {
+    mockCommands({
+      app_state: () => {
+        throw new Error("no IPC");
+      },
+    });
+    render(<App />);
+    expect(await screen.findByText(/Η εφαρμογή δεν αποκρίνεται/)).toBeInTheDocument();
   });
 });

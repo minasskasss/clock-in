@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+<!-- Hand-tuned 24 px layer: taskbar and Start list at 100 %; title bar at 150 %. -->
+  <circle cx="12" cy="12" r="12" fill="#d98a2b"/>
+  <circle cx="12" cy="12" r="9" fill="#fff1d2"/>
+  <g fill="#b23a22"><circle cx="7" cy="7" r="1.5"/><circle cx="12.5" cy="4.5" r="1.5"/><circle cx="17" cy="17" r="1.5"/></g>
+  <polyline points="6.5,12 10,15.5 17.5,7.5" fill="none" stroke="#7e2a16" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

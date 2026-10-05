@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+<!-- Android adaptive icon foreground: everything inside the 66 dp safe circle. -->
+  <circle cx="54" cy="54" r="29" fill="#f2b552"/>
+  <circle cx="54" cy="54" r="24" fill="#fff1d2"/>
+  <g stroke="#e2a24a" stroke-width="2.4" stroke-linecap="round"><line x1="54" y1="39" x2="54" y2="31"/><line x1="64.61" y1="43.39" x2="70.26" y2="37.74"/><line x1="69" y1="54" x2="77" y2="54"/><line x1="64.61" y1="64.61" x2="70.26" y2="70.26"/><line x1="54" y1="69" x2="54" y2="77"/><line x1="43.39" y1="64.61" x2="37.74" y2="70.26"/><line x1="39" y1="54" x2="31" y2="54"/><line x1="43.39" y1="43.39" x2="37.74" y2="37.74"/></g>
+  <g fill="#b23a22"><circle cx="71.15" cy="60.93" r="3.1"/><circle cx="47.07" cy="71.15" r="3.1"/><circle cx="36.85" cy="47.07" r="3.1"/></g>
+  <polyline points="45.91,52.05 54,56 63.96,44.13" fill="none" stroke="#7e2a16" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="54" cy="56" r="1.8" fill="#7e2a16"/>
+</svg>

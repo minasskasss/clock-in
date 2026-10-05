@@ -13,6 +13,7 @@
   --bg: #f6efe6;
   --surface: rgb(255 252 247 / 0.72);
   --surface-strong: rgb(255 252 247 / 0.92);
+  --surface-solid: #fffcf7; /* menus and dialogs: opaque, nothing shows through */
   --surface-border: rgb(120 84 52 / 0.14);
   --shadow: 0 1px 2px rgb(80 50 25 / 0.06), 0 12px 32px -12px rgb(80 50 25 / 0.18);
 
@@ -23,13 +24,11 @@
   --accent-contrast: #fffaf4;
   --focus-ring: #c2552f;
 
-  /* Atmospheric background */
-  --blob-1: #f2a27e; /* terracotta */
-  --blob-2: #f4cf7c; /* saffron */
-  --blob-3: #b7cda0; /* basil */
-  --blob-4: #e9b7a8; /* rose clay */
-  --blob-opacity: 0.55;
-  --grain-opacity: 0.07;
+  /* Static background glows (src/components/Background.css) */
+  --blob-1: rgb(242 162 126 / 0.5); /* terracotta */
+  --blob-2: rgb(244 207 124 / 0.5); /* saffron */
+  --blob-3: rgb(183 205 160 / 0.5); /* basil */
+  --blob-4: rgb(233 183 168 / 0.5); /* rose clay */
 
   /* Status colours (SPEC §3) */
   --status-pending-bg: rgb(255 252 247 / 0.78);
@@ -43,6 +42,18 @@
   --status-in-edge: #3f9a4f;
   --status-left-line: #d0342c;
   --status-late-out-edge: #e09a14;
+
+  /* Feedback */
+  --danger: #b3261e;
+  --danger-bg: #fbe3df;
+  --ok: #2f7a3c;
+  --warning-bg: #fdecc8;
+  --warning-fg: #5a3a05;
+  --go: #2f7a3c;
+  --go-contrast: #f6fff4;
+  --input-bg: rgb(255 255 255 / 0.85);
+  --input-border: rgb(120 84 52 / 0.28);
+  --backdrop: rgb(42 33 27 / 0.42);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -57,6 +68,7 @@
   --bg: #17120f;
   --surface: rgb(38 30 25 / 0.66);
   --surface-strong: rgb(42 33 28 / 0.92);
+  --surface-solid: #2a211c;
   --surface-border: rgb(255 228 200 / 0.1);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 16px 40px -16px rgb(0 0 0 / 0.6);
 
@@ -66,12 +78,10 @@
   --accent-contrast: #1c1410;
   --focus-ring: #f4a27e;
 
-  --blob-1: #8a3a22; /* ember */
-  --blob-2: #6b4a14; /* toasted saffron */
-  --blob-3: #34452b; /* olive */
-  --blob-4: #4b2a3a; /* wine */
-  --blob-opacity: 0.6;
-  --grain-opacity: 0.09;
+  --blob-1: rgb(138 58 34 / 0.55); /* ember */
+  --blob-2: rgb(107 74 20 / 0.55); /* toasted saffron */
+  --blob-3: rgb(52 69 43 / 0.55); /* olive */
+  --blob-4: rgb(75 42 58 / 0.55); /* wine */
 
   --status-pending-bg: rgb(42 33 28 / 0.8);
   --status-pending-fg: #f4ebe1;
@@ -84,6 +94,17 @@
   --status-in-edge: #5cc06d;
   --status-left-line: #ff6b5e;
   --status-late-out-edge: #f0b03a;
+
+  --danger: #ff8a7e;
+  --danger-bg: #4a1f1b;
+  --ok: #7fd58c;
+  --warning-bg: #4a3610;
+  --warning-fg: #ffe2a6;
+  --go: #4fae60;
+  --go-contrast: #0e1f11;
+  --input-bg: rgb(23 18 15 / 0.7);
+  --input-border: rgb(255 228 200 / 0.18);
+  --backdrop: rgb(0 0 0 / 0.55);
 }
 
 :root {

@@ -1,22 +1,25 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LANGUAGE_NAMES, LANGUAGES, isLanguage, setLanguage } from "../i18n";
+import { api, type AppStateView } from "../api";
+import { formatDateTime, parseDateTime } from "../dates";
 import { THEME_PREFERENCES, type ThemePreference } from "../theme/theme";
 import "./QuickMenu.css";
 
 interface QuickMenuProps {
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
+  /** Debug builds only: profile and fake clock. */
+  debug?: AppStateView["debug"];
+  onDebugChange?: () => void;
 }
 
-/** Language and theme menu. Needs no passphrase (SPEC §3). */
-export function QuickMenu({ theme, onThemeChange }: QuickMenuProps) {
-  const { t, i18n } = useTranslation();
+/** Theme menu (and the debug tools in debug builds). Needs no passphrase (SPEC §3). */
+export function QuickMenu({ theme, onThemeChange, debug, onDebugChange }: QuickMenuProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const currentLanguage = isLanguage(i18n.resolvedLanguage) ? i18n.resolvedLanguage : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -53,25 +56,8 @@ export function QuickMenu({ theme, onThemeChange }: QuickMenuProps) {
       {open && (
         <div id={panelId} className="quick-menu__panel">
           <fieldset className="quick-menu__group">
-            <legend className="quick-menu__legend">{t("menu.language")}</legend>
-            <div className="segmented">
-              {LANGUAGES.map((language) => (
-                <button
-                  key={language}
-                  type="button"
-                  lang={language}
-                  className="segmented__option"
-                  aria-pressed={currentLanguage === language}
-                  onClick={() => void setLanguage(language)}
-                >
-                  {LANGUAGE_NAMES[language]}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          <fieldset className="quick-menu__group">
             <legend className="quick-menu__legend">{t("menu.theme")}</legend>
-            <div className="segmented">
+            <div className="segmented segmented--grid">
               {THEME_PREFERENCES.map((option) => (
                 <button
                   key={option}
@@ -84,10 +70,63 @@ export function QuickMenu({ theme, onThemeChange }: QuickMenuProps) {
                 </button>
               ))}
             </div>
+            <p className="quick-menu__note">{t(`theme.${theme}Hint`)}</p>
           </fieldset>
+          {debug && <DebugSection debug={debug} onChange={onDebugChange} />}
         </div>
       )}
     </div>
+  );
+}
+
+/** Debug builds: which profile this is, and the fake clock (ARCHITECTURE §9). */
+function DebugSection({ debug, onChange }: { debug: NonNullable<AppStateView["debug"]>; onChange?: () => void }) {
+  const { t } = useTranslation();
+  const [value, setValue] = useState(debug.fakeClock ? formatDateTime(debug.fakeClock) : "");
+  const [bad, setBad] = useState(false);
+  const set = (local: string | null) =>
+    void api.debugSetClock(local).then(
+      () => {
+        setBad(false);
+        onChange?.();
+      },
+      () => setBad(true),
+    );
+  return (
+    <fieldset className="quick-menu__group quick-menu__debug">
+      <legend className="quick-menu__legend">{t("menu.debug")}</legend>
+      {debug.profile && <p className="quick-menu__note">{t("menu.profile", { name: debug.profile })}</p>}
+      <label className="quick-menu__note" htmlFor="fake-clock">
+        {t("menu.fakeClock")}
+      </label>
+      <input
+        id="fake-clock"
+        className="input"
+        placeholder={t("menu.fakeClockPlaceholder")}
+        autoComplete="off"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      {bad && <p className="field__error">{t("menu.fakeClockFormat")}</p>}
+      <div className="segmented">
+        <button
+          type="button"
+          className="segmented__option"
+          onClick={() => {
+            const local = parseDateTime(value);
+            if (local) set(local);
+            else setBad(true);
+          }}
+          disabled={!value}
+        >
+          {t("menu.setClock")}
+        </button>
+        <button type="button" className="segmented__option" onClick={() => set(null)}>
+          {t("menu.realClock")}
+        </button>
+      </div>
+      {debug.fakeClock && <p className="quick-menu__note">{t("menu.fakeClockOn", { time: formatDateTime(debug.fakeClock) })}</p>}
+    </fieldset>
   );
 }
 

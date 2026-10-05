@@ -17,13 +17,16 @@ Clock In is **only a reminder**. It is not the legal record, and it does not con
 
 ## 3. Language and look
 
-- **Language:** Greek by default, with an English toggle.
-- **Theme:** follows the system light/dark setting by default, with a manual override.
-- Language and theme live in a small menu that does **not** need the passphrase.
+- **Language:** Greek only (owner decision for v1; there is no English). All the wording lives in one central file, so it is easy to change.
+- **Theme:** a per-device setting with four options:
+  - **Αυτόματο** (automatic, the default): dark from 21:00 Greek time until the business-day rollover (§5, default 05:00), light the rest of the day. It switches by itself while the app is open, with no restart.
+  - **Σύστημα** (system): follows the device's light/dark setting (Windows, or Android in Phase 5).
+  - **Φωτεινό** (light) and **Σκοτεινό** (dark): always that.
+- The theme lives in a small menu that does **not** need the passphrase.
 - **Visual direction:** calm, warm and polished.
-  - Soft atmospheric background (blurred gradient shapes with subtle grain), with distinct palettes for light and dark.
+  - Soft, warm background made of a few **static** colour gradients, with distinct palettes for light and dark. No blur, no grain, no animation and no see-through blurred panels: it never moves and is not repainted continuously, so an idle app uses almost no graphics power (the shop PC runs it all day).
   - Large, legible names, readable from about 2 m away on the shop PC.
-  - Subtle transitions, with `prefers-reduced-motion` respected.
+  - Subtle transitions for small UI changes (dialogs, row colours), with `prefers-reduced-motion` respected.
 - **Status colours:**
 
 | State | Look |
@@ -49,6 +52,7 @@ Clock In is **only a reminder**. It is not the legal record, and it does not con
 
 - Each weekday (Monday–Sunday) has **zero or more time blocks** (start–end). Several blocks on one day is a **split shift**, e.g. 12:00–16:00 and 19:00–00:00.
 - **Time format:** 24-hour `HH:MM`, always Greek local time (Europe/Athens), whatever the device's timezone setting says.
+- **Date format:** every numeric date shown or typed is `dd/mm/yyyy` (e.g. 05/10/2026 is 5 October 2026), whatever the device's locale says; a date with a time is `dd/mm/yyyy HH:MM`. The Today header keeps the written form ("Δευτέρα 5 Οκτωβρίου"). Inside the app and on the server dates are ISO (`2026-10-05`).
 - **Weekdays are business days** (§5).
   - **End earlier than or equal to start** means the block ends the next calendar day, e.g. 18:00–02:00. "00:00" as an end time is allowed.
   - **Start earlier than the rollover hour** means the block starts after midnight, on the night that follows that business day. The editor shows "(+1)" next to any time that falls after midnight.
@@ -74,7 +78,7 @@ Overrides leave the weekly template untouched. Settings lists upcoming overrides
 | Check-out alarm offset (minutes relative to block end) | 0 | −60 … +30 |
 | Business-day rollover hour | 05:00 | 00:00 … 08:00 |
 | Start with Windows (shop PC) | on | — |
-| Quit code (Windows, see §8.1) | set at first run | exactly 4 digits |
+| Quit code (Windows, see §8.1; changed in the **Κωδικοί** section with the passphrase, §4.6) | set at first run | exactly 4 digits; a new code equal to the current one is refused |
 
 The repeat cycle (ring 5 minutes, silent 5 minutes) is fixed in v1.
 
@@ -86,8 +90,9 @@ Settings lists today's marks. The employer can **remove** a mistaken mark, for e
 
 - **First run:** the passphrase is set on the first device during setup. This works only while no passphrase exists yet.
 - **Format:** at least 5 words, each from the EFF large wordlist, separated by spaces. Input is normalised before checking: trimmed, lowercased, repeated spaces collapsed to one, Unicode NFC.
-- **Change passphrase:** needs the current passphrase plus the new one entered twice. Settings offers a **Generate** button that builds a 5-word passphrase using the OS's cryptographic random generator. A passphrase generated elsewhere (e.g. `tools/generate-passphrase.ps1` or dice) may be typed in instead.
+- **Change passphrase:** needs the current passphrase plus the new one entered twice. Settings offers a **Generate** button that builds a 5-word passphrase using the OS's cryptographic random generator. A passphrase generated elsewhere (e.g. `tools/generate-passphrase.ps1` or dice) may be typed in instead. Generate fills only the first "new" box, shown so it can be written down; the repeat box is always typed by hand from the paper. A new passphrase equal to the current one (after normalisation) is refused. Every passphrase box has a Show/Hide button that always works.
 - Changing the passphrase signs out every admin session. Paired devices stay paired.
+- Settings show **Change passphrase** and **Change quit code** (§4.4) together, in one section named **Κωδικοί** (codes).
 - **Wrong attempts:**
   - after 5 consecutive wrong attempts on any device, attempts lock for 1 minute;
   - each further failure doubles the lock, up to 60 minutes;
@@ -113,7 +118,7 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
   - Tapping a **left** row does nothing.
   - There is no undo. Only the employer can correct marks (§4.5).
 - **Marks can be made at any time**, including before the scheduled time. A mark made before an alarm is due **prevents that alarm on every device** (§7.2).
-- **Empty state:** "Κανείς δεν δουλεύει σήμερα" (EN: "Nobody is working today").
+- **Empty state:** "Κανείς δεν δουλεύει σήμερα" ("Nobody is working today").
 - **Banners, shown only when relevant:**
   - offline, with the last sync time;
   - device clock off from server time by more than 2 minutes;
@@ -177,14 +182,14 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
 - Closing the window hides it to the tray. The tray menu has **Open** and **Quit**.
 - **Quit asks for the 4-digit quit code.**
   - The code only prevents accidental closing. It is **not** a security measure, and staff may know it.
-  - The employer sets it during the first-run setup on Windows and can change it in Settings.
+  - The employer sets it during the first-run setup on Windows and can change it in Settings → **Κωδικοί**.
   - It is synced with the other settings and checked locally, so it also works offline.
   - There is no lockout on wrong codes.
 - While the app runs, Windows is kept from idle-sleeping (manual sleep and shutdown are still possible).
 
 ### 8.2 Android (employer's phone)
 
-- **Per-device settings, no passphrase needed:** alert mode (**Ring** / **Notification**, default Ring), language and theme.
+- **Per-device settings, no passphrase needed:** alert mode (**Ring** / **Notification**, default Ring) and theme (the same four options as §3, default **Αυτόματο**; **Σύστημα** follows Android's dark-theme setting). The app is Greek only, so there is no language setting.
 - **First-run onboarding** walks through each required permission and the battery-optimisation exemption. It shows a live checklist (✓ / ✗) that is also available later in the menu. The wording must be clear enough for a non-technical person following instructions over the phone.
 - **Distribution:** a signed APK (not Google Play). New versions install over the old one and keep data and pairing.
 

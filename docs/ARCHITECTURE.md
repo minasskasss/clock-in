@@ -27,7 +27,7 @@
   - `reqwest` with rustls;
   - `rusqlite` with SQLCipher (`bundled-sqlcipher-vendored-openssl`);
   - `rodio` for audio;
-  - `keyring` for Windows Credential Manager;
+  - `keyring-core` with `windows-native-keyring-store` (the keyring 4 family) for Windows Credential Manager;
   - `windows` for the Win32 calls.
 - Tauri plugins: tray, autostart, single-instance, notification, plus the custom Android plugin.
 - Kotlin for the Android alarm plugin.
@@ -58,16 +58,18 @@
 C:\dev\clock-in\
   CLAUDE.md
   docs/                        SPEC, ARCHITECTURE, PLAN, DECISIONS, SETUP, IDEAS, RECOVERY
-  crates/clockin-core/         pure logic: schedules, business day, plan, validation
+  crates/clockin-core/         pure logic: schedules, business day, plan, validation, automatic theme
   crates/clockin-sync/         RPC client, SQLCipher store, sync-loop logic (no Tauri)
-  src/                         React + TS UI (i18n in src/i18n/{el,en}.json)
-  src-tauri/                   Tauri app (Rust): sync timer, secrets, scheduler, audio, tray, commands
+  src/                         React + TS UI; Greek only, every string in src/i18n/el.json
+  src-tauri/                   Tauri app (Rust): sync loop, secrets, admin session, commands; scheduler, audio, tray (Phase 4)
   plugins/clockin-alarm/       Tauri plugin: Rust side + android/ (Kotlin)
   supabase/migrations/         SQL migrations (schema, functions, grants, cron)
   assets/sounds/               generated check-in / check-out WAVs
+  assets/icon/                 app icon sources (SVG): full design, hand-tuned 16/20/24/32/48 px, Android adaptive parts, icons.json
   assets/eff_large_wordlist.txt   (downloaded in Phase 0, SHA-256 recorded in DECISIONS)
   tools/gen-sounds/            small Rust bin that synthesises the sounds
   tools/generate-passphrase.ps1
+  tools/build-icons.mjs        `pnpm icons`: every icon in src-tauri/icons from assets/icon (tauri icon + an .ico with the tuned layers)
   .env.example                 SUPABASE_URL=, SUPABASE_PUBLISHABLE_KEY=   (committed, empty values)
   .env.dev / .env.prod         real values (gitignored)
 ```

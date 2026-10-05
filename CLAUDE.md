@@ -132,7 +132,7 @@ Before implementing anything in these areas, check the current official document
 ## Quality rules
 
 - **Time logic stays in the core crate.** All scheduling and time logic lives in `crates/clockin-core`, which is pure (no I/O, `now` passed in) and exhaustively unit-tested. The UI and the platform layers never do time arithmetic.
-- **All strings go through i18n.** Every user-facing string goes through i18n, with Greek (`el`) as the default and English (`en`) available.
+- **All strings go through i18n.** The app is Greek only (owner decision for v1). Every user-facing string lives in the single central file `src/i18n/el.json` (never hard-coded in components), so the wording stays easy to change. There is no English.
 - **Supported platforms:**
   - Windows 10 and 11 (x64);
   - Android at Tauri 2's minimum SDK or higher, tested on Android 13–16.

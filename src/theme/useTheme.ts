@@ -3,20 +3,29 @@ import {
   applyTheme,
   loadThemePreference,
   onSystemThemeChange,
+  rememberAutoDark,
   resolveTheme,
   saveThemePreference,
   type ThemePreference,
 } from "./theme";
 
-/** Current theme preference, kept applied to the document. */
-export function useTheme(): [ThemePreference, (preference: ThemePreference) => void] {
+/**
+ * Current theme preference, kept applied to the document. `autoDark` comes
+ * from the app state poll, so "auto" switches live at 21:00 and at the
+ * rollover.
+ */
+export function useTheme(autoDark: boolean | null): [ThemePreference, (preference: ThemePreference) => void] {
   const [preference, setPreferenceState] = useState<ThemePreference>(loadThemePreference);
 
   useEffect(() => {
-    applyTheme(resolveTheme(preference));
+    if (autoDark !== null) rememberAutoDark(autoDark);
+  }, [autoDark]);
+
+  useEffect(() => {
+    applyTheme(resolveTheme(preference, autoDark));
     if (preference !== "system") return;
     return onSystemThemeChange(() => applyTheme(resolveTheme("system")));
-  }, [preference]);
+  }, [preference, autoDark]);
 
   const setPreference = useCallback((next: ThemePreference) => {
     saveThemePreference(next);
