@@ -171,7 +171,7 @@
   border-left-color: var(--status-late-out-edge);
 }
 
-.row--late-out .row__status {
+.row.row--late-out .row__status {
   background: var(--status-due-bg);
   color: var(--status-due-fg);
 }

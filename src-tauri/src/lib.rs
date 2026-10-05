@@ -7,6 +7,8 @@ mod clock;
 mod commands;
 pub mod config;
 mod drafts;
+#[cfg(test)]
+mod e2e;
 mod error;
 mod passgen;
 mod profile;

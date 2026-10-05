@@ -267,6 +267,23 @@ fn random_secret() -> DeviceSecret {
 
 /// Schema `app` is unreachable through the Data API, and the grants are as
 /// ARCHITECTURE §5 describes.
+/// Leaves dev empty and uninitialised, ready for a manual "Set up as first
+/// device" test. Run on its own:
+///
+/// ```text
+/// cargo test -p clockin-sync --test backend reset_dev -- --ignored
+/// ```
+#[tokio::test]
+#[ignore = "uses the dev Supabase project"]
+async fn reset_dev() {
+    let dev = dev().await;
+    assert_eq!(
+        dev.i64("select count(*) from app.auth_state where passphrase_hash is null")
+            .await,
+        1
+    );
+}
+
 #[tokio::test]
 #[ignore = "uses the dev Supabase project"]
 async fn app_schema_is_unreachable_and_locked_down() {

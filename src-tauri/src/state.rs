@@ -273,16 +273,10 @@ impl AppState {
 
     /// The server no longer knows this device: back to the pairing screen.
     fn forget_pairing(&self, sync: &SyncControl) {
-        {
-            let mut pairing = lock(&self.pairing);
-            if pairing
-                .as_ref()
-                .is_some_and(|p| std::ptr::eq(Arc::as_ptr(&p.sync), sync))
-            {
-                *pairing = None;
-            }
-        }
+        // Forget the data first, so nothing of it shows once the phase says
+        // "unpaired".
         sync.finish();
+        lock(&self.admin).session = None;
         if let Err(e) = self.secrets.delete(SECRET_DEVICE) {
             eprintln!("clock-in: could not delete the device secret: {e}");
         }
@@ -293,7 +287,13 @@ impl AppState {
             .published
             .write()
             .unwrap_or_else(PoisonError::into_inner) = Published::default();
-        lock(&self.admin).session = None;
+        let mut pairing = lock(&self.pairing);
+        if pairing
+            .as_ref()
+            .is_some_and(|p| std::ptr::eq(Arc::as_ptr(&p.sync), sync))
+        {
+            *pairing = None;
+        }
     }
 
     /// Makes the sync loop run now (for a mark: no waiting).
