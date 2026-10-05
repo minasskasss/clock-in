@@ -29,7 +29,7 @@
   - `rodio` for audio;
   - `keyring-core` with `windows-native-keyring-store` (the keyring 4 family) for Windows Credential Manager;
   - `windows` for the Win32 calls.
-- Tauri plugins: tray, autostart, single-instance, notification, plus the custom Android plugin.
+- Tauri plugins: single-instance, notification, plus the custom Android plugin. The tray is Tauri's built-in `tray-icon`; start-with-Windows is a `Run` registry value the app writes itself (see §9).
 - Kotlin for the Android alarm plugin.
 - Supabase CLI as a dev dependency (`pnpm exec supabase ...`), used for migrations only.
 
@@ -206,7 +206,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 ## 9. Alarms — Windows
 
-- **Scheduler loop** (a Rust task):
+- **Scheduler loop** (a Rust task; every decision comes from `clockin-core::AlarmScheduler`):
   - find the next due event from the local plan and marks;
   - sleep until the earlier of that time and 30 s, then re-evaluate (robust to sleep/resume and clock changes);
   - fire immediately if the event is late by 15 minutes or less.
@@ -220,7 +220,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
   - tray icon plus menu;
   - closing the main window hides it;
   - **Quit** shows a 4-digit keypad and compares against the cached `quit_code`. It works offline.
-  - autostart via `tauri-plugin-autostart` (runs at user login), single instance via `tauri-plugin-single-instance`.
+  - autostart: the app writes `"<exe>" --autostart` to the current user's `Run` key (quoted path; `tauri-plugin-autostart` writes it unquoted) and starts hidden in the tray; single instance via `tauri-plugin-single-instance`.
 - **Keep-awake:** `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)` while running.
 - **Mute detection:** Core Audio `IAudioEndpointVolume` (`GetMute`, master volume = 0), polled every 30 s, drives the banner.
 - **Debug builds only:**
