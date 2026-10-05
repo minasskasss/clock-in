@@ -130,9 +130,9 @@ Then build:
 - the prod URL and publishable key are pasted into the chat;
 - `CLOCKIN_PROD_DB_URL` is set.
 
-Claude Code then applies the migrations to prod and builds the installer against prod.
+Claude Code then applies the migrations to prod and builds the prod installer. The prod installer is **not** installed or run on the laptop: nobody initializes prod from there. The first device on prod is the shop PC at go-live (SETUP §7), where the real passphrase is set.
 
-**Checklist (debug build with fake clock first, then the installed prod build on his laptop):**
+**Checklist (debug build with fake clock first, then the installed release build on his laptop, built with `CLOCKIN_ENV=dev` so it uses the dev project):**
 
 1. Close the window → the tray icon remains. At alarm time the alarm window appears on top and loops the **check-in** sound.
 2. Don't press Stop → it goes silent after 5 minutes and rings again at +10. Press Stop → it ends.
@@ -146,6 +146,7 @@ Claude Code then applies the migrations to prod and builds the installer against
 10. Mute Windows → the banner appears.
 11. Fake clock to 2026-10-25 around 03:00–04:00 with a shift spanning it → correct alarm times.
 12. Turn Wi-Fi off → the offline banner appears and alarms still fire. Mark someone offline, reconnect → the mark syncs.
+13. The installed release build opens no console window, and the only way to quit is Tray → Quit with the quit code (closing the window only hides it to the tray).
 
 **After merge:** go live on the shop PC (SETUP §7). From then on, prod is in real use, and later phases must not break it.
 
