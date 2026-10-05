@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/clockin-core",
+    "crates/clockin-sync",
     "src-tauri",
     "plugins/clockin-alarm",
     "tools/gen-sounds",
@@ -16,6 +17,7 @@ publish = false
 
 [workspace.dependencies]
 clockin-core = { path = "crates/clockin-core" }
+clockin-sync = { path = "crates/clockin-sync" }
 tauri-plugin-clockin-alarm = { path = "plugins/clockin-alarm" }
 # Always bundle the IANA tz database so Europe/Athens behaves the same on
 # Windows, Android and Linux (Windows and Android have no usable /usr/share/zoneinfo).

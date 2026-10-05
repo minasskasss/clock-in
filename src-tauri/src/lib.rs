@@ -1,5 +1,8 @@
-//! Clock In app core: Tauri setup. Sync, store, scheduler, audio and tray
-//! arrive in later phases (see `docs/PLAN.md`).
+//! Clock In app core: Tauri setup. The sync client and local store live in
+//! `clockin-sync`; the UI wiring, scheduler, audio and tray arrive in later
+//! phases (see `docs/PLAN.md`).
+
+pub mod config;
 
 /// Builds and runs the Tauri application.
 ///

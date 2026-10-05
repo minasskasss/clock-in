@@ -19,6 +19,7 @@ tauri-build.workspace = true
 
 [dependencies]
 clockin-core.workspace = true
+clockin-sync.workspace = true
 tauri-plugin-clockin-alarm.workspace = true
 tauri.workspace = true
 serde.workspace = true

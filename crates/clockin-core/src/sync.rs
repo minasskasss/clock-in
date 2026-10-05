@@ -14,6 +14,23 @@ pub const PLAN_REFRESH_BELOW: SignedDuration = SignedDuration::from_hours(13 * 2
 /// The "alarm schedule running short" banner shows below this (SPEC §6).
 pub const HORIZON_WARNING_BELOW: SignedDuration = SignedDuration::from_hours(3 * 24);
 
+/// How often the sync loop polls `get_version` while the server answers
+/// (ARCHITECTURE §8).
+pub const POLL_INTERVAL: SignedDuration = SignedDuration::from_secs(5);
+
+/// Delay before the next sync attempt after `consecutive_failures` failed
+/// ones in a row: 5 → 10 → 30 → 60 s, then 60 s (ARCHITECTURE §8). With no
+/// failures it is the normal [`POLL_INTERVAL`].
+#[must_use]
+pub fn sync_retry_delay(consecutive_failures: u32) -> SignedDuration {
+    match consecutive_failures {
+        0 | 1 => POLL_INTERVAL,
+        2 => SignedDuration::from_secs(10),
+        3 => SignedDuration::from_secs(30),
+        _ => SignedDuration::from_secs(60),
+    }
+}
+
 /// Whether the device clock is more than 2 minutes off server time.
 #[must_use]
 pub fn clock_skew_exceeded(server_now: Timestamp, device_now: Timestamp) -> bool {
@@ -94,6 +111,13 @@ mod tests {
         let (_, horizon_end) = plan_window(now());
         assert!(!plan_needs_refresh(1, 1, Some(horizon_end), now()));
         assert!(!horizon_short(Some(horizon_end), now()));
+    }
+
+    #[test]
+    fn retry_delay_backs_off_to_a_minute() {
+        let secs: Vec<i64> = (0..=6).map(|n| sync_retry_delay(n).as_secs()).collect();
+        assert_eq!(secs, [5, 5, 10, 30, 60, 60, 60]);
+        assert_eq!(sync_retry_delay(u32::MAX).as_secs(), 60);
     }
 
     #[test]
