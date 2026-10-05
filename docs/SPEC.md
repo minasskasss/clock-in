@@ -24,7 +24,7 @@ Clock In is **only a reminder**. It is not the legal record, and it does not con
   - **Φωτεινό** (light) and **Σκοτεινό** (dark): always that.
 - The theme lives in a small menu that does **not** need the passphrase.
 - **Visual direction:** calm, warm and polished.
-  - Soft, warm background with distinct palettes for light and dark. The background is **static**: it never moves and is not repainted continuously, so an idle app uses almost no graphics power (the shop PC runs it all day).
+  - Soft, warm background made of a few **static** colour gradients, with distinct palettes for light and dark. No blur, no grain, no animation and no see-through blurred panels: it never moves and is not repainted continuously, so an idle app uses almost no graphics power (the shop PC runs it all day).
   - Large, legible names, readable from about 2 m away on the shop PC.
   - Subtle transitions for small UI changes (dialogs, row colours), with `prefers-reduced-motion` respected.
 - **Status colours:**
@@ -52,6 +52,7 @@ Clock In is **only a reminder**. It is not the legal record, and it does not con
 
 - Each weekday (Monday–Sunday) has **zero or more time blocks** (start–end). Several blocks on one day is a **split shift**, e.g. 12:00–16:00 and 19:00–00:00.
 - **Time format:** 24-hour `HH:MM`, always Greek local time (Europe/Athens), whatever the device's timezone setting says.
+- **Date format:** every numeric date shown or typed is `dd/mm/yyyy` (e.g. 05/10/2026 is 5 October 2026), whatever the device's locale says; a date with a time is `dd/mm/yyyy HH:MM`. The Today header keeps the written form ("Δευτέρα 5 Οκτωβρίου"). Inside the app and on the server dates are ISO (`2026-10-05`).
 - **Weekdays are business days** (§5).
   - **End earlier than or equal to start** means the block ends the next calendar day, e.g. 18:00–02:00. "00:00" as an end time is allowed.
   - **Start earlier than the rollover hour** means the block starts after midnight, on the night that follows that business day. The editor shows "(+1)" next to any time that falls after midnight.

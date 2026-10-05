@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type AppStateView } from "../api";
+import { formatDateTime, parseDateTime } from "../dates";
 import { THEME_PREFERENCES, type ThemePreference } from "../theme/theme";
 import "./QuickMenu.css";
 
@@ -81,7 +82,7 @@ export function QuickMenu({ theme, onThemeChange, debug, onDebugChange }: QuickM
 /** Debug builds: which profile this is, and the fake clock (ARCHITECTURE §9). */
 function DebugSection({ debug, onChange }: { debug: NonNullable<AppStateView["debug"]>; onChange?: () => void }) {
   const { t } = useTranslation();
-  const [value, setValue] = useState(debug.fakeClock?.replace("T", " ") ?? "");
+  const [value, setValue] = useState(debug.fakeClock ? formatDateTime(debug.fakeClock) : "");
   const [bad, setBad] = useState(false);
   const set = (local: string | null) =>
     void api.debugSetClock(local).then(
@@ -108,14 +109,23 @@ function DebugSection({ debug, onChange }: { debug: NonNullable<AppStateView["de
       />
       {bad && <p className="field__error">{t("menu.fakeClockFormat")}</p>}
       <div className="segmented">
-        <button type="button" className="segmented__option" onClick={() => set(value || null)} disabled={!value}>
+        <button
+          type="button"
+          className="segmented__option"
+          onClick={() => {
+            const local = parseDateTime(value);
+            if (local) set(local);
+            else setBad(true);
+          }}
+          disabled={!value}
+        >
           {t("menu.setClock")}
         </button>
         <button type="button" className="segmented__option" onClick={() => set(null)}>
           {t("menu.realClock")}
         </button>
       </div>
-      {debug.fakeClock && <p className="quick-menu__note">{t("menu.fakeClockOn", { time: debug.fakeClock.replace("T", " ") })}</p>}
+      {debug.fakeClock && <p className="quick-menu__note">{t("menu.fakeClockOn", { time: formatDateTime(debug.fakeClock) })}</p>}
     </fieldset>
   );
 }

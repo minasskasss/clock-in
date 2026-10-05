@@ -369,9 +369,9 @@ pub fn generate_passphrase(state: AppS<'_>) -> Result<String, CmdError> {
 pub fn debug_set_clock(state: AppS<'_>, local: Option<String>) -> Result<(), CmdError> {
     let target = match local {
         None => None,
-        // "2026-10-05 21:00" (typed) or "2026-10-05T21:00".
+        // ISO "2026-10-05T21:00"; the UI reads the typed dd/mm/yyyy HH:MM.
         Some(text) => Some(
-            jiff::civil::DateTime::strptime("%Y-%m-%d %H:%M", text.trim().replacen('T', " ", 1))
+            jiff::civil::DateTime::strptime("%Y-%m-%dT%H:%M", text.trim())
                 .map_err(|_| CmdError::invalid("fake_clock", "format"))?,
         ),
     };

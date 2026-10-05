@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import i18n from "./i18n";
 import { errorMessage } from "./errors";
-import { formatCountdown, formatHours, formatLongDate, formatStamp, tidyTime } from "./format";
+import { formatCountdown, formatHours, tidyTime } from "./format";
 
 describe("format", () => {
   it("tidies typed times into HH:MM", () => {
@@ -24,12 +24,6 @@ describe("format", () => {
     expect(formatHours(t, { start: "01:00", end: "04:00", startNextDay: true, endNextDay: true })).toBe(
       "01:00 (+1) – 04:00 (+1)",
     );
-  });
-
-  it("formats civil dates the same in any device timezone", () => {
-    expect(formatLongDate("2026-10-25")).toEqual({ weekday: "Κυριακή", date: "25 Οκτωβρίου" });
-    expect(formatStamp({ date: "2026-10-05", time: "14:03" }, "2026-10-05")).toBe("14:03");
-    expect(formatStamp({ date: "2026-10-04", time: "14:03" }, "2026-10-05")).toMatch(/^4 Οκτ\S* 14:03$/);
   });
 
   it("turns command errors into plain messages", () => {

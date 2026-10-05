@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type DeviceView } from "../api";
 import { Confirm } from "../components/Confirm";
-import { formatStamp } from "../format";
+import { formatStamp } from "../dates";
 import { useAdmin } from "./admin";
 
 /** Settings → Devices: the paired devices; revoke one (SPEC §2). */

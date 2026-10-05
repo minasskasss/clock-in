@@ -91,6 +91,56 @@ describe("Settings", () => {
     ]);
   });
 
+  it("shows and reads one-off change dates as dd/mm/yyyy, sending ISO to Rust", async () => {
+    const calls = mockCommands({
+      app_state: appState({ adminUnlocked: true }),
+      admin_view: adminView({
+        overrides: [
+          { id: "o1", staffId: "s1", firstName: "Μαρία", lastName: "Παππά", businessDate: "2026-10-06", kind: "off", blocks: [] },
+        ],
+        devices: [
+          {
+            id: "d1",
+            name: "SHOP-PC",
+            platform: "windows",
+            pairedAt: { date: "2026-10-01", time: "10:00" },
+            lastSeen: { date: "2026-10-04", time: "23:41" },
+            thisDevice: true,
+          },
+        ],
+      }),
+      validate_override: (args: { businessDate: string }) => ({
+        dateProblem: args.businessDate === "" ? "bad_date" : null,
+        blocks: [],
+        noBlocks: false,
+        ok: args.businessDate !== "",
+      }),
+      override_save: null,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Ρυθμίσεις" }));
+    await user.click(await screen.findByRole("tab", { name: "Αλλαγές ημέρας" }));
+    expect(screen.getByText(/Τρί 06\/10\/2026 · Μαρία Παππά/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Νέα αλλαγή" }));
+    const box = screen.getByLabelText("Ημερομηνία");
+    expect(box).toHaveValue("05/10/2026");
+    expect(box).not.toHaveAttribute("type", "date");
+    await user.clear(box);
+    await user.type(box, "10/25/2026");
+    await user.tab();
+    expect(await screen.findByText("Γράψτε την ημερομηνία ως ηη/μμ/εεεε, π.χ. 05/10/2026.")).toBeInTheDocument();
+    await user.clear(box);
+    await user.type(box, "07/10/2026");
+    await user.click(screen.getByRole("button", { name: "Αποθήκευση" }));
+    expect(callsTo(calls, "override_save")).toEqual([{ staffId: "s1", businessDate: "2026-10-07", kind: "off", blocks: [] }]);
+
+    await user.click(screen.getByRole("tab", { name: "Συσκευές" }));
+    expect(screen.getByText(/01\/10\/2026 10:00/)).toBeInTheDocument();
+    expect(screen.getByText(/04\/10\/2026 23:41/)).toBeInTheDocument();
+  });
+
   it("asks for the passphrase again in place when the server session ran out, then retries", async () => {
     let sessionValid = false;
     const calls = mockCommands({

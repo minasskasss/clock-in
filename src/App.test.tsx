@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import App from "./App";
 import { setSystemPrefersDark } from "./test/setup";
-import { appState, mockCommands } from "./test/tauri";
+import { appState, callsTo, mockCommands } from "./test/tauri";
 
 describe("App", () => {
   it("shows the Greek first-run choices on an unpaired device, with the background", async () => {
@@ -93,13 +93,18 @@ describe("App", () => {
     await screen.findByText("11:42");
     await user.click(screen.getByRole("button", { name: "Μενού" }));
     expect(screen.getByText("Προφίλ: b")).toBeInTheDocument();
-    expect(screen.getByText("Ενεργό: 2026-10-25 03:30")).toBeInTheDocument();
+    expect(screen.getByText("Ενεργό: 25/10/2026 03:30")).toBeInTheDocument();
     const box = screen.getByLabelText("Ψεύτικο ρολόι (ώρα Ελλάδας)");
-    expect(box).toHaveValue("2026-10-25 03:30");
+    expect(box).toHaveValue("25/10/2026 03:30");
     await user.clear(box);
-    await user.type(box, "2026-10-05 21:00");
+    await user.type(box, "05/10/2026 9:00 PM");
     await user.click(screen.getByRole("button", { name: "Ορισμός" }));
-    expect(calls.some((c) => c.command === "debug_set_clock" && c.args?.local === "2026-10-05 21:00")).toBe(true);
+    expect(screen.getByText("Γράψτε ημερομηνία και ώρα όπως 05/10/2026 21:00.")).toBeInTheDocument();
+    expect(callsTo(calls, "debug_set_clock")).toHaveLength(0);
+    await user.clear(box);
+    await user.type(box, "05/10/2026 21:00");
+    await user.click(screen.getByRole("button", { name: "Ορισμός" }));
+    expect(callsTo(calls, "debug_set_clock")).toEqual([{ local: "2026-10-05T21:00" }]);
     await user.click(screen.getByRole("button", { name: "Πραγματική ώρα" }));
     expect(calls.some((c) => c.command === "debug_set_clock" && c.args?.local === null)).toBe(true);
   });

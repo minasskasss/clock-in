@@ -5,7 +5,8 @@ import { Confirm } from "../components/Confirm";
 import { Dialog } from "../components/Dialog";
 import { Field, FormMessage } from "../components/Field";
 import { errorMessage } from "../errors";
-import { formatHours, formatShortDate } from "../format";
+import { formatDate, formatShortDate, parseDate } from "../dates";
+import { formatHours } from "../format";
 import { useAdmin } from "./admin";
 import { BlockList } from "./BlockList";
 import { newUid, type EditBlock } from "./blocks";
@@ -73,7 +74,10 @@ function OverrideEditor({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const { view, run } = useAdmin();
   const [staffId, setStaffId] = useState(view.staff[0]?.id ?? "");
-  const [date, setDate] = useState(view.today);
+  // Typed as dd/mm/yyyy; Rust gets ISO ("" when it isn't a date yet).
+  const [dateText, setDateText] = useState(() => formatDate(view.today));
+  const [dateTouched, setDateTouched] = useState(false);
+  const date = parseDate(dateText) ?? "";
   const [kind, setKind] = useState<OverrideKind>("off");
   const [blocks, setBlocks] = useState<EditBlock[]>(() => [{ uid: newUid(), id: null, start: "", end: "" }]);
   const [report, setReport] = useState<OverrideReport | null>(null);
@@ -114,7 +118,7 @@ function OverrideEditor({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const dateError = report?.dateProblem ? t(`overrides.${report.dateProblem}`) : null;
+  const dateError = report?.dateProblem && (dateTouched || submitted) ? t(`overrides.${report.dateProblem}`) : null;
 
   return (
     <Dialog title={t("overrides.newTitle")} onClose={busy ? undefined : onClose} wide>
@@ -130,7 +134,16 @@ function OverrideEditor({ onClose }: { onClose: () => void }) {
             </select>
           </Field>
           <Field label={t("overrides.date")} error={dateError}>
-            <input className="input" type="date" min={view.today} value={date} onChange={(e) => setDate(e.target.value)} disabled={busy} />
+            <input
+              className="input input--narrow"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder={t("common.datePlaceholder")}
+              value={dateText}
+              onChange={(e) => setDateText(e.target.value)}
+              onBlur={() => setDateTouched(true)}
+              disabled={busy}
+            />
           </Field>
         </div>
         <fieldset className="radio-group">
