@@ -47,7 +47,7 @@ function invalidMessage(t: TFunction, e: Extract<CmdError, { kind: "invalid" }>)
     case "device_name":
       return t("errors.device_name");
     case "quit_code":
-      return t("errors.quit_code");
+      return e.problem === "same_as_current" ? t("quitCode.same") : t("errors.quit_code");
     case "blocks":
       return t("errors.blocks");
     default:
@@ -64,6 +64,8 @@ export function passphraseProblem(t: TFunction, problem: string, positions?: num
       return t("passphrase.too_short");
     case "unknown_words":
       return t("passphrase.unknown_words", { positions: (positions ?? []).map((p) => p + 1).join(", ") });
+    case "same_as_current":
+      return t("passphrase.same_as_current");
     default:
       return t("passphrase.empty");
   }

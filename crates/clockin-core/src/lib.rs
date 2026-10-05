@@ -49,7 +49,7 @@ pub use occurrence::{Occurrence, occurrences};
 pub use passphrase::{
     EFF_WORD_COUNT, GENERATED_WORDS, MIN_CHARS as PASSPHRASE_MIN_CHARS,
     MIN_WORDS as PASSPHRASE_MIN_WORDS, PassphraseError, check_passphrase, eff_word,
-    normalize_passphrase, passphrase_from_indices,
+    normalize_passphrase, passphrase_from_indices, same_passphrase,
 };
 pub use plan::{MISSED_ALARM_GRACE, PLAN_HORIZON, PlanItem, alarm_plan, item_id, plan_window};
 pub use ring::{RING_DURATION, RingPhase, SILENT_DURATION, ring_cycle_state};

@@ -11,7 +11,7 @@ use crate::state::{AppState, Phase};
 use crate::views::{AdminView, Banners, TodayView};
 use clockin_core::{
     MarkKind, NameError, OverrideKind, ScheduleSettings, is_valid_quit_code, normalize_name,
-    validate_settings,
+    same_passphrase, validate_settings,
 };
 use clockin_sync::{QuitCode, SettingsInput};
 use serde::Serialize;
@@ -78,10 +78,15 @@ pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
 
 /// Live feedback while typing a new passphrase. Returns nothing if fine.
 #[tauri::command]
-pub fn check_new_passphrase(passphrase: String) -> Result<(), CmdError> {
-    clockin_core::check_passphrase(&passphrase)
-        .map(drop)
-        .map_err(crate::state::passphrase_error)
+pub fn check_new_passphrase(passphrase: String, current: Option<String>) -> Result<(), CmdError> {
+    clockin_core::check_passphrase(&passphrase).map_err(crate::state::passphrase_error)?;
+    // Both typed into the same form: nothing is learned from the answer.
+    match current {
+        Some(current) if same_passphrase(&current, &passphrase) => {
+            Err(CmdError::invalid("passphrase", "same_as_current"))
+        }
+        _ => Ok(()),
+    }
 }
 
 #[tauri::command]
@@ -299,13 +304,7 @@ pub async fn settings_save(
         };
         return Err(CmdError::invalid(field, "range"));
     }
-    let quit_code = match quit_code.filter(|c| !c.is_empty()) {
-        Some(code) if is_valid_quit_code(&code) => QuitCode::new(code),
-        Some(_) => return Err(CmdError::invalid("quit_code", "format")),
-        None => state
-            .current_quit_code()
-            .ok_or(CmdError::invalid("quit_code", "missing"))?,
-    };
+    let quit_code = new_quit_code(quit_code, state.current_quit_code(), state.admin_unlocked())?;
     let input = SettingsInput {
         checkin_offset_min,
         checkout_offset_min,
@@ -318,6 +317,25 @@ pub async fn settings_save(
             api.settings_update(&secret, &session, &input).await
         })
         .await
+}
+
+/// The quit code a settings save sends: the requested new one, or the current
+/// one when none is given. A new code equal to the current one is refused.
+fn new_quit_code(
+    requested: Option<String>,
+    current: Option<QuitCode>,
+    unlocked: bool,
+) -> Result<QuitCode, CmdError> {
+    match requested.filter(|c| !c.is_empty()) {
+        // Only with Settings open, so the answer can't be used to guess the code.
+        Some(_) if !unlocked => Err(crate::state::no_session()),
+        Some(code) if current.as_ref().is_some_and(|c| c.expose() == code) => {
+            Err(CmdError::invalid("quit_code", "same_as_current"))
+        }
+        Some(code) if is_valid_quit_code(&code) => Ok(QuitCode::new(code)),
+        Some(_) => Err(CmdError::invalid("quit_code", "format")),
+        None => current.ok_or(CmdError::invalid("quit_code", "missing")),
+    }
 }
 
 #[tauri::command]
@@ -379,5 +397,72 @@ pub fn debug_set_clock(state: AppS<'_>, local: Option<String>) -> Result<(), Cmd
         Ok(())
     } else {
         Err(CmdError::invalid("fake_clock", "unavailable"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GOOD: &str = "abacus zoom cloud tiger mango";
+
+    #[test]
+    fn a_new_passphrase_equal_to_the_current_one_is_refused() {
+        assert_eq!(check_new_passphrase(GOOD.into(), None), Ok(()));
+        assert_eq!(
+            check_new_passphrase(GOOD.into(), Some("abacus zoom cloud tiger melon".into())),
+            Ok(())
+        );
+        assert_eq!(
+            check_new_passphrase(
+                GOOD.into(),
+                Some("  Abacus ZOOM cloud  tiger mango ".into())
+            ),
+            Err(CmdError::invalid("passphrase", "same_as_current"))
+        );
+        // A badly formed new passphrase reports that first.
+        assert_eq!(
+            check_new_passphrase("abacus".into(), Some("abacus".into())),
+            Err(CmdError::invalid("passphrase", "too_few_words"))
+        );
+    }
+
+    #[test]
+    fn a_new_quit_code_equal_to_the_current_one_is_refused() {
+        let current = || Some(QuitCode::new("1234".into()));
+        assert_eq!(
+            new_quit_code(Some("1234".into()), current(), true),
+            Err(CmdError::invalid("quit_code", "same_as_current"))
+        );
+        assert_eq!(
+            new_quit_code(Some("5678".into()), current(), true)
+                .unwrap()
+                .expose(),
+            "5678"
+        );
+        assert_eq!(
+            new_quit_code(Some("12a4".into()), current(), true),
+            Err(CmdError::invalid("quit_code", "format"))
+        );
+        // No new code: the current one is kept.
+        assert_eq!(
+            new_quit_code(None, current(), true).unwrap().expose(),
+            "1234"
+        );
+        assert_eq!(
+            new_quit_code(Some(String::new()), current(), true)
+                .unwrap()
+                .expose(),
+            "1234"
+        );
+        // Locked Settings: no answer either way.
+        assert_eq!(
+            new_quit_code(Some("1234".into()), current(), false),
+            Err(crate::state::no_session())
+        );
+        assert_eq!(
+            new_quit_code(Some("5678".into()), current(), false),
+            Err(crate::state::no_session())
+        );
     }
 }

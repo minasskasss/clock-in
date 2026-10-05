@@ -200,7 +200,9 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 
 export const api = {
   appState: () => call<AppStateView>("app_state"),
-  checkNewPassphrase: (passphrase: string) => call<void>("check_new_passphrase", { passphrase }),
+  /** `current` (typed in the same form): refuses a new passphrase equal to it. */
+  checkNewPassphrase: (passphrase: string, current?: string) =>
+    call<void>("check_new_passphrase", { passphrase, current: current ?? null }),
   initialize: (passphrase: string, quitCode: string, deviceName: string) =>
     call<void>("initialize", { passphrase, quitCode, deviceName }),
   pair: (passphrase: string, deviceName: string) => call<void>("pair", { passphrase, deviceName }),

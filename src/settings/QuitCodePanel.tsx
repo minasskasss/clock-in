@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import { Field, FormMessage } from "../components/Field";
-import { errorMessage, invalidField } from "../errors";
+import { errorMessage } from "../errors";
 import { useAdmin } from "./admin";
 
 const QUIT_CODE = /^[0-9]{4}$/;
@@ -40,7 +40,7 @@ export function QuitCodePanel() {
       setCode2("");
       setMessage({ tone: "ok", text: t("quitCode.done") });
     } catch (e) {
-      setMessage({ tone: "error", text: invalidField(e) === "quit_code" ? t("errors.quit_code") : errorMessage(t, e) });
+      setMessage({ tone: "error", text: errorMessage(t, e) });
     } finally {
       setBusy(false);
     }

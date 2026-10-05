@@ -78,7 +78,7 @@ Overrides leave the weekly template untouched. Settings lists upcoming overrides
 | Check-out alarm offset (minutes relative to block end) | 0 | −60 … +30 |
 | Business-day rollover hour | 05:00 | 00:00 … 08:00 |
 | Start with Windows (shop PC) | on | — |
-| Quit code (Windows, see §8.1; changed in the **Κωδικοί** section with the passphrase, §4.6) | set at first run | exactly 4 digits |
+| Quit code (Windows, see §8.1; changed in the **Κωδικοί** section with the passphrase, §4.6) | set at first run | exactly 4 digits; a new code equal to the current one is refused |
 
 The repeat cycle (ring 5 minutes, silent 5 minutes) is fixed in v1.
 
@@ -90,7 +90,7 @@ Settings lists today's marks. The employer can **remove** a mistaken mark, for e
 
 - **First run:** the passphrase is set on the first device during setup. This works only while no passphrase exists yet.
 - **Format:** at least 5 words, each from the EFF large wordlist, separated by spaces. Input is normalised before checking: trimmed, lowercased, repeated spaces collapsed to one, Unicode NFC.
-- **Change passphrase:** needs the current passphrase plus the new one entered twice. Settings offers a **Generate** button that builds a 5-word passphrase using the OS's cryptographic random generator. A passphrase generated elsewhere (e.g. `tools/generate-passphrase.ps1` or dice) may be typed in instead.
+- **Change passphrase:** needs the current passphrase plus the new one entered twice. Settings offers a **Generate** button that builds a 5-word passphrase using the OS's cryptographic random generator. A passphrase generated elsewhere (e.g. `tools/generate-passphrase.ps1` or dice) may be typed in instead. Generate fills only the first "new" box, shown so it can be written down; the repeat box is always typed by hand from the paper. A new passphrase equal to the current one (after normalisation) is refused. Every passphrase box has a Show/Hide button that always works.
 - Changing the passphrase signs out every admin session. Paired devices stay paired.
 - Settings show **Change passphrase** and **Change quit code** (§4.4) together, in one section named **Κωδικοί** (codes).
 - **Wrong attempts:**

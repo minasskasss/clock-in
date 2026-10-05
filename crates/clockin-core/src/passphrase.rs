@@ -64,6 +64,13 @@ pub fn normalize_passphrase(raw: &str) -> String {
         .join(" ")
 }
 
+/// Whether two typed passphrases are the same once normalised (a "new"
+/// passphrase equal to the current one is refused).
+#[must_use]
+pub fn same_passphrase(a: &str, b: &str) -> bool {
+    normalize_passphrase(a) == normalize_passphrase(b)
+}
+
 /// Why a passphrase was refused.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "error", rename_all = "snake_case")]
@@ -130,6 +137,23 @@ mod tests {
             "abacus zoom drop-down cloud"
         );
         assert_eq!(normalize_passphrase(""), "");
+    }
+
+    #[test]
+    fn same_after_normalisation() {
+        assert!(same_passphrase(
+            "abacus zoom cloud tiger mango",
+            "  Abacus ZOOM	cloud  tiger mango
+"
+        ));
+        assert!(!same_passphrase(
+            "abacus zoom cloud tiger mango",
+            "abacus zoom cloud tiger melon"
+        ));
+        assert!(!same_passphrase(
+            "abacus zoom cloud tiger mango",
+            "zoom abacus cloud tiger mango"
+        ));
     }
 
     #[test]

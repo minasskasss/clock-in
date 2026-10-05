@@ -23,10 +23,11 @@ export function PassphrasePanel({ lockoutRemainingS, onChanged }: PassphrasePane
   const [next, setNext] = useState("");
   const [next2, setNext2] = useState("");
   const [generated, setGenerated] = useState(false);
+  const [showNext, setShowNext] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const check = useNewPassphraseCheck(next);
+  const check = useNewPassphraseCheck(next, current);
   const locked = lockoutRemainingS > 0;
   const mismatch = next2 !== "" && next2.trim() !== next.trim();
   const ready = current.trim() !== "" && check === "ok" && next2.trim() === next.trim() && !locked;
@@ -35,9 +36,12 @@ export function PassphrasePanel({ lockoutRemainingS, onChanged }: PassphrasePane
     setError(null);
     try {
       const words = await run(() => api.generatePassphrase());
+      // Only the first box: the second is typed from the paper, which proves
+      // it was written down correctly.
       setNext(words);
-      setNext2(words);
+      setNext2("");
       setGenerated(true);
+      setShowNext(true);
     } catch (e) {
       setError(errorMessage(t, e));
     }
@@ -53,6 +57,8 @@ export function PassphrasePanel({ lockoutRemainingS, onChanged }: PassphrasePane
       setCurrent("");
       setNext("");
       setNext2("");
+      setGenerated(false);
+      setShowNext(false);
       setDone(true);
     } catch (e) {
       const err = toCmdError(e);
@@ -84,7 +90,8 @@ export function PassphrasePanel({ lockoutRemainingS, onChanged }: PassphrasePane
               setNext(v);
               setGenerated(false);
             }}
-            revealed={generated}
+            shown={showNext}
+            onShownChange={setShowNext}
             disabled={busy}
           />
         </Field>
@@ -94,7 +101,7 @@ export function PassphrasePanel({ lockoutRemainingS, onChanged }: PassphrasePane
           </button>
         </div>
         <Field label={t("changePassphrase.repeat")} error={mismatch ? t("changePassphrase.mismatch") : null}>
-          <PassphraseInput value={next2} onChange={setNext2} revealed={generated} disabled={busy} />
+          <PassphraseInput value={next2} onChange={setNext2} disabled={busy} />
         </Field>
         {locked && <FormMessage tone="error">{t("lockout.locked", { time: formatCountdown(lockoutRemainingS) })}</FormMessage>}
         {!locked && error && <FormMessage tone="error">{error}</FormMessage>}

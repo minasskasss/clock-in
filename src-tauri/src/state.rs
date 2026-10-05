@@ -14,7 +14,7 @@ use crate::secrets::SecretStore;
 use crate::views;
 use clockin_core::{
     MarkKind, admin_idle_expired, check_passphrase, is_valid_quit_code, lockout_until,
-    normalize_passphrase, seconds_until,
+    normalize_passphrase, same_passphrase, seconds_until,
 };
 use clockin_sync::{
     Api, ApiError, DeviceSecret, MarkRequest, Pairing as ServerPairing, Platform, QuitCode,
@@ -674,6 +674,9 @@ impl AppState {
     pub async fn change_passphrase(&self, old: &str, new: &str) -> Result<(), CmdError> {
         let new = check_passphrase(new).map_err(passphrase_error)?;
         let old = nonempty_passphrase(old)?;
+        if same_passphrase(&old, &new) {
+            return Err(CmdError::invalid("passphrase", "same_as_current"));
+        }
         let pairing = self.pairing()?;
         let token = self.session_token()?;
         let result = pairing
@@ -697,7 +700,7 @@ impl AppState {
     }
 }
 
-fn no_session() -> CmdError {
+pub(crate) fn no_session() -> CmdError {
     CmdError::Rejected {
         code: "no_session".into(),
         retry_after_s: None,
@@ -880,6 +883,15 @@ mod tests {
         );
         assert_eq!(state.admin_view(), Err(CmdError::NotPaired));
         assert_eq!(state.lockout_remaining_s(), 0);
+        // An unchanged passphrase is refused before anything is sent.
+        let same = tauri::async_runtime::block_on(state.change_passphrase(
+            "abacus zoom cloud tiger mango",
+            " Abacus Zoom Cloud Tiger Mango",
+        ));
+        assert_eq!(
+            same,
+            Err(CmdError::invalid("passphrase", "same_as_current"))
+        );
         drop(state);
         std::fs::remove_dir_all(&dir).unwrap();
     }
