@@ -1,0 +1,65 @@
+/* First-run screens: plain, one thing at a time (SPEC §2: set up remotely). */
+
+.first-run {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 720px;
+  justify-self: center;
+}
+
+.first-run__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.first-run__intro {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1.125rem;
+}
+
+.first-run__back {
+  justify-self: start;
+  margin: calc(-1 * var(--space-2)) 0 0 calc(-1 * var(--space-3));
+}
+
+.choices {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.choice {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--surface-border);
+  border-left: 8px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--duration) var(--ease-out),
+    box-shadow var(--duration) var(--ease-out);
+}
+
+.choice:hover {
+  box-shadow: var(--shadow);
+}
+
+.choice:active {
+  transform: scale(0.995);
+}
+
+.choice__title {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 650;
+}
+
+.choice__hint {
+  color: var(--text-muted);
+}

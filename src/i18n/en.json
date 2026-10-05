@@ -1,11 +1,27 @@
 {
   "app": {
-    "name": "Clock In"
+    "name": "Clock In",
+    "loading": "Loading…",
+    "coreFailed": "The app is not responding. Close it and open it again.",
+    "devBadge": "Test"
   },
-  "placeholder": {
-    "title": "Coming soon: today's schedule",
-    "body": "This is an early build for checking the look. Try the language and theme from the menu.",
-    "legendTitle": "Status colours"
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "remove": "Remove",
+    "close": "Close",
+    "back": "Back",
+    "add": "Add",
+    "edit": "Edit",
+    "ok": "OK",
+    "show": "Show",
+    "hide": "Hide",
+    "plusOne": "(+1)",
+    "plusOneHint": "the next day",
+    "dash": "–",
+    "timePlaceholder": "HH:MM"
   },
   "status": {
     "pending": "Pending",
@@ -14,15 +30,261 @@
     "left": "Left",
     "shouldHaveLeft": "Should have left"
   },
+  "weekday": {
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday",
+    "7": "Sunday"
+  },
+  "weekdayShort": {
+    "1": "Mon",
+    "2": "Tue",
+    "3": "Wed",
+    "4": "Thu",
+    "5": "Fri",
+    "6": "Sat",
+    "7": "Sun"
+  },
   "menu": {
     "open": "Menu",
     "close": "Close menu",
     "language": "Language",
-    "theme": "Theme"
+    "theme": "Theme",
+    "debug": "Testing (development build only)",
+    "profile": "Profile: {{name}}",
+    "fakeClock": "Fake clock (Greek time)",
+    "setClock": "Set",
+    "realClock": "Real time",
+    "fakeClockOn": "On: {{time}}"
   },
   "theme": {
     "system": "System",
     "light": "Light",
     "dark": "Dark"
+  },
+  "notConfigured": {
+    "title": "Server settings are missing",
+    "body": "This build was made without the connection details. Ask Minas for a new build."
+  },
+  "welcome": {
+    "title": "Welcome to Clock In",
+    "intro": "This device isn't connected yet. Choose one:",
+    "first": "Set up as first device",
+    "firstHint": "Only once, on the shop's first device. You set the passphrase and the quit code.",
+    "pair": "Pair this device",
+    "pairHint": "For every further device. Needs the employer's passphrase."
+  },
+  "setup": {
+    "title": "Set up as first device",
+    "stepPassphrase": "1. Passphrase",
+    "passphraseIntro": "Type the passphrase: at least 5 English words from the list, separated by spaces. Staff must not learn it.",
+    "passphrase": "Passphrase",
+    "passphraseRepeat": "Passphrase again",
+    "passphraseOk": "The passphrase is valid.",
+    "passphraseMismatch": "The two passphrases are not the same.",
+    "stepQuitCode": "2. Quit code",
+    "quitCodeIntro": "4 digits. Asked for when the app is closed, so it isn't closed by accident. It is not secret.",
+    "quitCode": "Quit code",
+    "quitCodeRepeat": "Quit code again",
+    "quitCodeFormat": "Exactly 4 digits.",
+    "quitCodeMismatch": "The two quit codes are not the same.",
+    "stepDevice": "3. Device name",
+    "deviceIntro": "How this device appears in the device list.",
+    "deviceName": "Device name",
+    "submit": "Finish setup",
+    "submitting": "Setting up…"
+  },
+  "pair": {
+    "title": "Pair this device",
+    "intro": "Type the employer's passphrase. It's needed only once on this device.",
+    "passphrase": "Passphrase",
+    "deviceName": "Device name",
+    "submit": "Pair",
+    "submitting": "Pairing…"
+  },
+  "passphrase": {
+    "show": "Show passphrase",
+    "hide": "Hide passphrase",
+    "empty": "Type the passphrase.",
+    "too_few_words": "At least 5 words are needed.",
+    "too_short": "The passphrase is too short (at least 20 characters).",
+    "unknown_words": "Not in the list: word {{positions}}. Check the spelling."
+  },
+  "lockout": {
+    "locked": "Too many wrong attempts. Try again in {{time}}."
+  },
+  "today": {
+    "empty": "Nobody is working today",
+    "syncing": "Loading today's schedule…",
+    "noData": "No connection, and no schedule has been loaded yet.",
+    "settings": "Settings",
+    "rowHint": "Tap to mark"
+  },
+  "confirm": {
+    "inTitle": "Check in",
+    "inBody": "Mark {{name}} as checked in?",
+    "inYes": "Yes, checked in",
+    "outTitle": "Check out",
+    "outBody": "Mark {{name}} as left?",
+    "outYes": "Yes, left",
+    "noUndo": "This can't be undone. Only the employer can correct it."
+  },
+  "banner": {
+    "offline": "Offline. Last sync: {{when}}. Marks are saved and will be sent when the connection is back.",
+    "offlineNever": "Offline. Marks are saved and will be sent when the connection is back.",
+    "clockSkew": "This computer's clock is more than 2 minutes off. Check the Windows date and time settings.",
+    "horizonShort": "The alarm schedule covers less than 3 days. Keep Clock In open and online."
+  },
+  "unlock": {
+    "title": "Settings",
+    "intro": "Type the employer's passphrase.",
+    "reauth": "The Settings session ended. Type the passphrase again to continue.",
+    "passphrase": "Passphrase",
+    "submit": "Open",
+    "submitting": "Checking…",
+    "wrong": "Wrong passphrase."
+  },
+  "errors": {
+    "offline": "Can't reach the server. Check the internet connection and try again.",
+    "notPaired": "This device is not paired.",
+    "notConfigured": "Server settings are missing.",
+    "internal": "Something went wrong on this computer. Try again.",
+    "already_initialized": "A first device already exists. Choose \"Pair this device\".",
+    "not_initialized": "No first device has been set up yet. Choose \"Set up as first device\".",
+    "bad_passphrase": "Wrong passphrase.",
+    "no_session": "Settings locked. Open them again.",
+    "revoked": "This device has been unpaired.",
+    "bad_secret": "This device has been unpaired.",
+    "invalid_input": "The server did not accept the change.",
+    "generic": "The change was not made. Try again.",
+    "device_name": "The device name must have 1 to 60 characters.",
+    "quit_code": "The quit code must be exactly 4 digits.",
+    "blocks": "Fix the hours that are marked.",
+    "range": "The value is out of range."
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back to today",
+    "tabs": {
+      "staff": "Staff",
+      "overrides": "One-off changes",
+      "marks": "Today's marks",
+      "alarms": "Alarms",
+      "devices": "Devices",
+      "passphrase": "Passphrase"
+    }
+  },
+  "staff": {
+    "title": "Staff",
+    "add": "New staff member",
+    "empty": "No staff yet. Press \"New staff member\".",
+    "editTitle": "Edit: {{name}}",
+    "newTitle": "New staff member",
+    "firstName": "First name",
+    "lastName": "Last name",
+    "schedule": "Weekly schedule",
+    "scheduleHint": "24-hour times, e.g. 09:00. If the end is after midnight, type it as is (e.g. 02:00): it shows \"(+1)\".",
+    "noHours": "Day off",
+    "addHours": "+ Hours",
+    "removeHours": "Remove hours",
+    "start": "Start",
+    "end": "End",
+    "removeTitle": "Remove staff member",
+    "removeBody": "Remove {{name}}? They disappear from their next shift onward. Their marks are kept for 30 days.",
+    "removeYes": "Yes, remove",
+    "noBlocks": "Add at least one shift."
+  },
+  "name": {
+    "empty": "Fill in this field.",
+    "too_long": "At most 40 characters.",
+    "no_letters": "At least one letter is needed.",
+    "invalid_character": "\"{{character}}\" is not allowed. Only letters, space, hyphen and apostrophe."
+  },
+  "block": {
+    "bad_start": "Type the start as HH:MM, e.g. 09:30.",
+    "bad_end": "Type the end as HH:MM, e.g. 17:00.",
+    "bad_weekday": "Invalid day.",
+    "start_equals_end": "Start and end are the same.",
+    "too_short": "Shift too short: at least 15 minutes.",
+    "too_long": "Shift too long: at most 16 hours.",
+    "overlaps": "Overlaps shift {{other}}."
+  },
+  "overrides": {
+    "title": "One-off changes",
+    "intro": "A day off or different hours for one person on one date. The weekly schedule doesn't change.",
+    "add": "New change",
+    "empty": "No changes from today on.",
+    "newTitle": "New one-off change",
+    "person": "Staff member",
+    "date": "Date",
+    "kind": "What changes",
+    "off": "Day off",
+    "replace": "Different hours",
+    "hours": "Hours on that day",
+    "replaceNote": "If that person already has a change on that date, it is replaced.",
+    "past_date": "The date must be today or later.",
+    "bad_date": "Choose a date.",
+    "deleteTitle": "Delete change",
+    "deleteBody": "Delete the change for {{name}} on {{date}}? The weekly schedule applies again.",
+    "deleteYes": "Yes, delete",
+    "noStaff": "Add staff first."
+  },
+  "marks": {
+    "title": "Today's marks",
+    "intro": "Remove a mark only if it was tapped by mistake.",
+    "empty": "No marks today.",
+    "in": "Checked in",
+    "out": "Left",
+    "at": "at {{time}}",
+    "shift": "shift {{hours}}",
+    "removeTitle": "Remove mark",
+    "removeBody": "Remove the \"{{kind}}\" mark for {{name}}?",
+    "removeYes": "Yes, remove"
+  },
+  "alarms": {
+    "title": "Alarms and settings",
+    "checkinOffset": "Check-in alarm",
+    "checkoutOffset": "Check-out alarm",
+    "onTime": "Exactly on time",
+    "before": "{{count}} minutes before",
+    "after": "{{count}} minutes after",
+    "rollover": "Day changes at",
+    "rolloverHint": "Shifts starting before this time belong to the previous day's night.",
+    "autostart": "Start with Windows",
+    "quitCode": "New quit code",
+    "quitCodeRepeat": "New quit code again",
+    "quitCodeHint": "Leave empty to keep the current one.",
+    "saved": "Saved."
+  },
+  "devices": {
+    "title": "Devices",
+    "intro": "The paired devices. If a device is lost or replaced, unpair it.",
+    "thisDevice": "This device",
+    "pairedAt": "Paired {{when}}",
+    "lastSeen": "Last seen {{when}}",
+    "never": "Not seen yet",
+    "revoke": "Unpair",
+    "revokeTitle": "Unpair device",
+    "revokeBody": "Unpair the device \"{{name}}\"? It will need the passphrase to pair again.",
+    "revokeSelf": "This is the device you are using now: it will go back to the pairing screen.",
+    "revokeYes": "Yes, unpair",
+    "windows": "Computer",
+    "android": "Phone"
+  },
+  "changePassphrase": {
+    "title": "Change passphrase",
+    "intro": "After the change, Settings lock on every device. Devices stay paired.",
+    "current": "Current passphrase",
+    "new": "New passphrase",
+    "repeat": "New passphrase again",
+    "generate": "Generate",
+    "generatedNote": "Write it on paper now and keep it away from the shop.",
+    "mismatch": "The two new passphrases are not the same.",
+    "submit": "Change passphrase",
+    "doneTitle": "The passphrase was changed",
+    "doneBody": "From now on only the new one works. Settings will lock now."
   }
 }

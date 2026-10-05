@@ -1,0 +1,221 @@
+/* The Today view: readable from about 2 m away on the shop PC (SPEC §3). */
+
+.today {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.today__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+}
+
+.today__date {
+  display: grid;
+  margin: 0;
+  font-family: var(--font-display);
+  line-height: 1.1;
+}
+
+.today__weekday {
+  font-size: clamp(2rem, 1.4rem + 2.2vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.today__day {
+  color: var(--text-muted);
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
+  font-weight: 500;
+}
+
+.today__clock {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 2rem + 4vw, 5.5rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.today__empty {
+  margin: var(--space-7) 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: var(--text-name);
+  font-weight: 600;
+}
+
+/* --- Banners ------------------------------------------------------------------- */
+
+.banners {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.banner {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 6px solid var(--status-due-edge);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning-fg);
+  font-weight: 600;
+}
+
+/* --- Rows ---------------------------------------------------------------------- */
+
+.rows {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name status"
+    "hours status";
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--surface-border);
+  border-left: 10px solid var(--row-edge);
+  border-radius: var(--radius-md);
+  background: var(--row-bg);
+  color: var(--row-fg);
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition:
+    background-color var(--duration) var(--ease-out),
+    color var(--duration) var(--ease-out),
+    border-color var(--duration) var(--ease-out),
+    transform var(--duration) var(--ease-out);
+}
+
+.row--tappable {
+  cursor: pointer;
+}
+
+.row--tappable:hover {
+  filter: brightness(1.03);
+}
+
+.row--tappable:active {
+  transform: scale(0.995);
+}
+
+.row__name {
+  grid-area: name;
+  font-family: var(--font-display);
+  font-size: var(--text-name);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.row__hours {
+  grid-area: hours;
+  font-size: 1.25rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.row__status {
+  grid-area: status;
+  padding: var(--space-2) var(--space-4);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.4);
+  font-size: 1.125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .row__status {
+  background: rgb(0 0 0 / 0.25);
+}
+
+.row--pending {
+  --row-bg: var(--status-pending-bg);
+  --row-fg: var(--status-pending-fg);
+  --row-edge: var(--status-pending-edge);
+}
+
+.row--due {
+  --row-bg: var(--status-due-bg);
+  --row-fg: var(--status-due-fg);
+  --row-edge: var(--status-due-edge);
+}
+
+.row--in,
+.row--left,
+.row--late-out {
+  --row-bg: var(--status-in-bg);
+  --row-fg: var(--status-in-fg);
+  --row-edge: var(--status-in-edge);
+}
+
+/* Should have left: green row with an amber accent. */
+.row--late-out {
+  --row-edge: var(--status-late-out-edge);
+  border-color: var(--status-late-out-edge);
+  border-left-color: var(--status-late-out-edge);
+}
+
+.row--late-out .row__status {
+  background: var(--status-due-bg);
+  color: var(--status-due-fg);
+}
+
+/* Left: green row with a red line through it. */
+.row--left {
+  position: relative;
+}
+
+.row--left .row__name,
+.row--left .row__hours {
+  text-decoration: line-through;
+  text-decoration-color: var(--status-left-line);
+  text-decoration-thickness: 4px;
+}
+
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "name"
+      "hours"
+      "status";
+  }
+
+  .row__status {
+    justify-self: start;
+  }
+}
+
+/* --- Confirm dialog ---------------------------------------------------------------- */
+
+.confirm__question {
+  font-size: 1.375rem;
+  font-weight: 600;
+}
+
+.confirm__hours {
+  color: var(--text-muted);
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.confirm__note {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}

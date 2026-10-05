@@ -1,0 +1,200 @@
+/* Settings: tabs, panels and the schedule editors. */
+
+.settings {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.settings__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+}
+
+.tabs__tab {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: calc(var(--radius-md) - 4px);
+  background: transparent;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration) var(--ease-out),
+    color var(--duration) var(--ease-out);
+}
+
+.tabs__tab:hover {
+  background: rgb(127 127 127 / 0.12);
+}
+
+.tabs__tab[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.settings__panel {
+  min-height: 320px;
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.panel__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 650;
+}
+
+.panel__intro {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.panel__empty {
+  margin: var(--space-5) 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Staff list: the week at a glance. */
+.week-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-summary__day {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.week-summary__off {
+  opacity: 0.6;
+}
+
+/* Weekly schedule editor. */
+.week {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.week__legend {
+  margin-bottom: var(--space-1);
+  padding: 0;
+  font-weight: 650;
+  font-size: 1.125rem;
+}
+
+.week__day {
+  display: grid;
+  grid-template-columns: 8.5em 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--surface-border);
+}
+
+.week__label {
+  padding-top: var(--space-2);
+  font-weight: 650;
+}
+
+.week__blocks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-3);
+}
+
+.week__off {
+  padding-top: var(--space-2);
+  color: var(--text-muted);
+}
+
+.block-list {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.block-row {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 100%;
+}
+
+.block-row__times {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+}
+
+.block-row--error .block-row__times {
+  border-color: var(--danger);
+}
+
+.block-row__field {
+  display: inline-flex;
+  align-items: center;
+}
+
+.block-row__dash {
+  color: var(--text-muted);
+}
+
+.block-row .field__error {
+  max-width: 22em;
+}
+
+@media (max-width: 640px) {
+  .week__day {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+}

@@ -106,7 +106,9 @@ struct Published {
 }
 
 struct Session {
-    token: SessionToken,
+    /// `None` once the server refused it; the next change asks for the
+    /// passphrase again.
+    token: Option<SessionToken>,
     last_activity: Timestamp,
 }
 
@@ -360,7 +362,7 @@ impl AppState {
     ///
     /// `no_session` unless Settings are unlocked; not paired.
     pub fn admin_view(&self) -> Result<Option<views::AdminView>, CmdError> {
-        self.session()?;
+        self.unlocked()?;
         let published = self
             .published
             .read()
@@ -561,19 +563,19 @@ impl AppState {
     /// Whether Settings are unlocked. Locks them after 5 idle minutes.
     #[must_use]
     pub fn admin_unlocked(&self) -> bool {
-        self.session().is_ok()
+        self.unlocked().is_ok()
     }
 
-    fn session(&self) -> Result<SessionToken, CmdError> {
+    /// Settings are open on this device (they may still need the
+    /// passphrase again if the server session ran out).
+    fn unlocked(&self) -> Result<(), CmdError> {
         let pairing = self.pairing()?;
         let mut admin = lock(&self.admin);
         match &admin.session {
-            Some(s) if !admin_idle_expired(s.last_activity, Timestamp::now()) => {
-                Ok(s.token.clone())
-            }
+            Some(s) if !admin_idle_expired(s.last_activity, Timestamp::now()) => Ok(()),
             Some(_) => {
-                if let Some(expired) = admin.session.take() {
-                    logout_in_background(&pairing, expired.token);
+                if let Some(token) = admin.session.take().and_then(|s| s.token) {
+                    logout_in_background(&pairing, token);
                 }
                 Err(no_session())
             }
@@ -581,16 +583,33 @@ impl AppState {
         }
     }
 
+    /// The server session token, or `no_session` if the passphrase is needed.
+    fn session_token(&self) -> Result<SessionToken, CmdError> {
+        self.unlocked()?;
+        lock(&self.admin)
+            .session
+            .as_ref()
+            .and_then(|s| s.token.clone())
+            .ok_or_else(no_session)
+    }
+
+    /// The server refused the token: keep Settings open, ask again.
+    fn drop_token(&self) {
+        if let Some(s) = &mut lock(&self.admin).session {
+            s.token = None;
+        }
+    }
+
     /// The employer is still using Settings.
     pub fn admin_touch(&self) {
-        if self.session().is_ok()
+        if self.unlocked().is_ok()
             && let Some(s) = &mut lock(&self.admin).session
         {
             s.last_activity = Timestamp::now();
         }
     }
 
-    /// Unlocks Settings.
+    /// Unlocks Settings (or renews the server session while they are open).
     ///
     /// # Errors
     ///
@@ -601,7 +620,7 @@ impl AppState {
         let result = pairing.api.admin_login(&pairing.secret, &passphrase).await;
         let session = self.note_lockout(result)?;
         lock(&self.admin).session = Some(Session {
-            token: session.session_token,
+            token: Some(session.session_token),
             last_activity: Timestamp::now(),
         });
         Ok(())
@@ -609,9 +628,9 @@ impl AppState {
 
     /// Locks Settings (leaving the screen).
     pub fn admin_logout(&self) {
-        let session = lock(&self.admin).session.take();
-        if let (Some(session), Ok(pairing)) = (session, self.pairing()) {
-            logout_in_background(&pairing, session.token);
+        let token = lock(&self.admin).session.take().and_then(|s| s.token);
+        if let (Some(token), Ok(pairing)) = (token, self.pairing()) {
+            logout_in_background(&pairing, token);
         }
     }
 
@@ -627,7 +646,7 @@ impl AppState {
         Fut: Future<Output = Result<T, ApiError>>,
     {
         let pairing = self.pairing()?;
-        let token = self.session()?;
+        let token = self.session_token()?;
         match call(pairing.api.clone(), pairing.secret.clone(), token).await {
             Ok(value) => {
                 self.admin_touch();
@@ -637,14 +656,16 @@ impl AppState {
             }
             Err(e) => {
                 if e.code() == Some(&clockin_sync::ErrorCode::NoSession) {
-                    lock(&self.admin).session = None;
+                    self.drop_token();
                 }
                 Err(e.into())
             }
         }
     }
 
-    /// Changes the passphrase; every admin session ends, including this one.
+    /// Changes the passphrase. The server ends every admin session, this one
+    /// too: Settings stay open for the confirmation, but any further change
+    /// needs the new passphrase.
     ///
     /// # Errors
     ///
@@ -654,7 +675,7 @@ impl AppState {
         let new = check_passphrase(new).map_err(passphrase_error)?;
         let old = nonempty_passphrase(old)?;
         let pairing = self.pairing()?;
-        let token = self.session()?;
+        let token = self.session_token()?;
         let result = pairing
             .api
             .change_passphrase(&pairing.secret, &token, &old, &new)
@@ -662,10 +683,10 @@ impl AppState {
         if let Err(ApiError::Rejected(r)) = &result
             && r.error == clockin_sync::ErrorCode::NoSession
         {
-            lock(&self.admin).session = None;
+            self.drop_token();
         }
         self.note_lockout(result)?;
-        lock(&self.admin).session = None;
+        self.drop_token();
         Ok(())
     }
 

@@ -43,6 +43,18 @@
   --status-in-edge: #3f9a4f;
   --status-left-line: #d0342c;
   --status-late-out-edge: #e09a14;
+
+  /* Feedback */
+  --danger: #b3261e;
+  --danger-bg: #fbe3df;
+  --ok: #2f7a3c;
+  --warning-bg: #fdecc8;
+  --warning-fg: #5a3a05;
+  --go: #2f7a3c;
+  --go-contrast: #f6fff4;
+  --input-bg: rgb(255 255 255 / 0.85);
+  --input-border: rgb(120 84 52 / 0.28);
+  --backdrop: rgb(42 33 27 / 0.42);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -84,6 +96,17 @@
   --status-in-edge: #5cc06d;
   --status-left-line: #ff6b5e;
   --status-late-out-edge: #f0b03a;
+
+  --danger: #ff8a7e;
+  --danger-bg: #4a1f1b;
+  --ok: #7fd58c;
+  --warning-bg: #4a3610;
+  --warning-fg: #ffe2a6;
+  --go: #4fae60;
+  --go-contrast: #0e1f11;
+  --input-bg: rgb(23 18 15 / 0.7);
+  --input-border: rgb(255 228 200 / 0.18);
+  --backdrop: rgb(0 0 0 / 0.55);
 }
 
 :root {
