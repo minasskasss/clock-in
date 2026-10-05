@@ -10,10 +10,11 @@ import { DevicesPanel } from "./DevicesPanel";
 import { MarksPanel } from "./MarksPanel";
 import { OverridesPanel } from "./OverridesPanel";
 import { PassphrasePanel } from "./PassphrasePanel";
+import { QuitCodePanel } from "./QuitCodePanel";
 import { StaffPanel } from "./StaffPanel";
 import "./Settings.css";
 
-const TABS = ["staff", "overrides", "marks", "alarms", "devices", "passphrase"] as const;
+const TABS = ["staff", "overrides", "marks", "alarms", "devices", "codes"] as const;
 type Tab = (typeof TABS)[number];
 
 interface SettingsProps {
@@ -125,7 +126,12 @@ export function Settings({ dataVersion, lockoutRemainingS, onExit }: SettingsPro
             {tab === "marks" && <MarksPanel />}
             {tab === "alarms" && <AlarmsPanel />}
             {tab === "devices" && <DevicesPanel />}
-            {tab === "passphrase" && <PassphrasePanel lockoutRemainingS={lockoutRemainingS} onChanged={onExit} />}
+            {tab === "codes" && (
+              <div className="panel-stack">
+                <PassphrasePanel lockoutRemainingS={lockoutRemainingS} onChanged={onExit} />
+                <QuitCodePanel />
+              </div>
+            )}
           </AdminContext.Provider>
         ) : (
           !loadError && <p className="panel__empty">{t("app.loading")}</p>

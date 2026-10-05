@@ -11,7 +11,6 @@
   border-radius: 50%;
   background: var(--surface);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
   cursor: pointer;
   transition:
     background-color var(--duration) var(--ease-out),
@@ -37,9 +36,8 @@
   padding: var(--space-4);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
-  background: var(--surface-strong);
+  background: var(--surface-solid);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(16px);
   animation: panel-in var(--duration) var(--ease-out);
 }
 
@@ -64,6 +62,11 @@
   padding: var(--space-1);
   border-radius: var(--radius-sm);
   background: rgb(127 127 127 / 0.12);
+}
+
+.segmented--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
 }
 
 .segmented__option {

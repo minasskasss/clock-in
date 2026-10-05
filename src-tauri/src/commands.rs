@@ -37,6 +37,8 @@ pub struct AppStateView {
     banners: Banners,
     admin_unlocked: bool,
     data_version: i64,
+    /// Whether the automatic theme is dark right now (SPEC §3).
+    auto_dark: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -68,6 +70,7 @@ pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
         },
         admin_unlocked: paired && state.admin_unlocked(),
         data_version: state.data_version(),
+        auto_dark: clockin_core::auto_theme_is_dark(state.clock.now(), state.rollover()),
     })
 }
 
@@ -366,8 +369,9 @@ pub fn generate_passphrase(state: AppS<'_>) -> Result<String, CmdError> {
 pub fn debug_set_clock(state: AppS<'_>, local: Option<String>) -> Result<(), CmdError> {
     let target = match local {
         None => None,
+        // "2026-10-05 21:00" (typed) or "2026-10-05T21:00".
         Some(text) => Some(
-            jiff::civil::DateTime::strptime("%Y-%m-%dT%H:%M", text.trim())
+            jiff::civil::DateTime::strptime("%Y-%m-%d %H:%M", text.trim().replacen('T', " ", 1))
                 .map_err(|_| CmdError::invalid("fake_clock", "format"))?,
         ),
     };

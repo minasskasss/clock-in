@@ -1,17 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import App from "../App";
-import { setLanguage } from "../i18n";
 import { adminView, appState, callsTo, mockCommands } from "../test/tauri";
 
 const noSession = { kind: "rejected", code: "no_session", retryAfterS: null, details: null };
 
 describe("Settings", () => {
-  beforeEach(async () => {
-    await setLanguage("el");
-  });
-
   it("asks for the passphrase, says when it is wrong, and opens Settings when right", async () => {
     let unlocked = false;
     const calls = mockCommands({
@@ -66,6 +61,34 @@ describe("Settings", () => {
     expect(within(dialog).getByText(/Να αφαιρεθεί ο\/η Μαρία Παππά;/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Ναι, αφαίρεση" }));
     expect(callsTo(calls, "staff_remove")).toEqual([{ id: "s1" }]);
+  });
+
+  it("changes the quit code under Κωδικοί, keeping the other settings, and no longer under Ειδοποιήσεις", async () => {
+    const calls = mockCommands({
+      app_state: appState({ adminUnlocked: true }),
+      admin_view: adminView({ settings: { checkinOffsetMin: -10, checkoutOffsetMin: 5, rollover: "04:00", autostart: false } }),
+      settings_save: null,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Ρυθμίσεις" }));
+    await user.click(await screen.findByRole("tab", { name: "Ειδοποιήσεις" }));
+    expect(screen.queryByLabelText("Νέος κωδικός εξόδου")).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Κωδικός φράση" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Κωδικοί" }));
+    expect(screen.getByRole("heading", { name: "Αλλαγή κωδικού φράσης" })).toBeInTheDocument();
+    const submit = screen.getByRole("button", { name: "Αλλαγή κωδικού εξόδου" });
+    await user.type(screen.getByLabelText("Νέος κωδικός εξόδου"), "4321");
+    await user.type(screen.getByLabelText("Ξανά ο νέος κωδικός εξόδου"), "4320");
+    expect(screen.getByText("Οι δύο κωδικοί εξόδου δεν είναι ίδιοι.")).toBeInTheDocument();
+    expect(submit).toBeDisabled();
+    await user.type(screen.getByLabelText("Ξανά ο νέος κωδικός εξόδου"), "{Backspace}1");
+    await user.click(submit);
+    expect(await screen.findByText("Ο κωδικός εξόδου άλλαξε.")).toBeInTheDocument();
+    expect(callsTo(calls, "settings_save")).toEqual([
+      { checkinOffsetMin: -10, checkoutOffsetMin: 5, rollover: "04:00", autostart: false, quitCode: "4321" },
+    ]);
   });
 
   it("asks for the passphrase again in place when the server session ran out, then retries", async () => {

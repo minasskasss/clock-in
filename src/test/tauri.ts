@@ -64,6 +64,7 @@ export function appState(overrides: Partial<AppStateView> = {}): AppStateView {
     banners: { offline: false, lastSync: null, clockSkew: false, horizonShort: false },
     adminUnlocked: false,
     dataVersion: 1,
+    autoDark: false,
     ...overrides,
   };
 }

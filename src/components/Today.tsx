@@ -32,7 +32,7 @@ interface TodayProps {
 
 /** The main screen (SPEC §6). */
 export function Today({ today, banners, onChanged }: TodayProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [confirm, setConfirm] = useState<{ row: Row; kind: MarkKind } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,7 +51,7 @@ export function Today({ today, banners, onChanged }: TodayProps) {
     }
   };
 
-  const heading = today ? formatLongDate(today.businessDate, i18n.language) : null;
+  const heading = today ? formatLongDate(today.businessDate) : null;
   const name = confirm ? `${confirm.row.firstName} ${confirm.row.lastName}` : "";
 
   return (
@@ -152,13 +152,13 @@ function RowItem({ row, onTap }: { row: Row; onTap: (kind: MarkKind) => void }) 
 }
 
 function Banners({ banners, today }: { banners: BannerState; today: string | null }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const items: { key: string; text: string }[] = [];
   if (banners.offline) {
     items.push({
       key: "offline",
       text: banners.lastSync
-        ? t("banner.offline", { when: formatStamp(banners.lastSync, today, i18n.language) })
+        ? t("banner.offline", { when: formatStamp(banners.lastSync, today) })
         : t("banner.offlineNever"),
     });
   }

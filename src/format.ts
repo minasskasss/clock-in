@@ -5,27 +5,26 @@
 import type { TFunction } from "i18next";
 import type { LocalStamp } from "./api";
 
-function locale(language: string): string {
-  return language === "en" ? "en-GB" : "el-GR";
-}
+/** Dates are always shown in Greek (SPEC §3). */
+const LOCALE = "el-GR";
 
 /** A civil ISO date ("2026-10-05") as a calendar day, independent of the device timezone. */
 function civil(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
 }
 
-/** "Δευτέρα 5 Οκτωβρίου" / "Monday 5 October". */
-export function formatLongDate(iso: string, language: string): { weekday: string; date: string } {
+/** "Δευτέρα 5 Οκτωβρίου". */
+export function formatLongDate(iso: string): { weekday: string; date: string } {
   const day = civil(iso);
   return {
-    weekday: new Intl.DateTimeFormat(locale(language), { weekday: "long", timeZone: "UTC" }).format(day),
-    date: new Intl.DateTimeFormat(locale(language), { day: "numeric", month: "long", timeZone: "UTC" }).format(day),
+    weekday: new Intl.DateTimeFormat(LOCALE, { weekday: "long", timeZone: "UTC" }).format(day),
+    date: new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long", timeZone: "UTC" }).format(day),
   };
 }
 
-/** "Τρι 6 Οκτ" / "Tue 6 Oct". */
-export function formatShortDate(iso: string, language: string): string {
-  return new Intl.DateTimeFormat(locale(language), {
+/** "Τρι 6 Οκτ". */
+export function formatShortDate(iso: string): string {
+  return new Intl.DateTimeFormat(LOCALE, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -34,9 +33,9 @@ export function formatShortDate(iso: string, language: string): string {
 }
 
 /** A stamp as "14:03" when it is on `today`, else "5 Οκτ 14:03". */
-export function formatStamp(stamp: LocalStamp, today: string | null, language: string): string {
+export function formatStamp(stamp: LocalStamp, today: string | null): string {
   if (stamp.date === today) return stamp.time;
-  const date = new Intl.DateTimeFormat(locale(language), {
+  const date = new Intl.DateTimeFormat(LOCALE, {
     day: "numeric",
     month: "short",
     timeZone: "UTC",

@@ -17,13 +17,16 @@ Clock In is **only a reminder**. It is not the legal record, and it does not con
 
 ## 3. Language and look
 
-- **Language:** Greek by default, with an English toggle.
-- **Theme:** follows the system light/dark setting by default, with a manual override.
-- Language and theme live in a small menu that does **not** need the passphrase.
+- **Language:** Greek only (owner decision for v1; there is no English). All the wording lives in one central file, so it is easy to change.
+- **Theme:** a per-device setting with four options:
+  - **Αυτόματο** (automatic, the default): dark from 21:00 Greek time until the business-day rollover (§5, default 05:00), light the rest of the day. It switches by itself while the app is open, with no restart.
+  - **Σύστημα** (system): follows the device's light/dark setting (Windows, or Android in Phase 5).
+  - **Φωτεινό** (light) and **Σκοτεινό** (dark): always that.
+- The theme lives in a small menu that does **not** need the passphrase.
 - **Visual direction:** calm, warm and polished.
-  - Soft atmospheric background (blurred gradient shapes with subtle grain), with distinct palettes for light and dark.
+  - Soft, warm background with distinct palettes for light and dark. The background is **static**: it never moves and is not repainted continuously, so an idle app uses almost no graphics power (the shop PC runs it all day).
   - Large, legible names, readable from about 2 m away on the shop PC.
-  - Subtle transitions, with `prefers-reduced-motion` respected.
+  - Subtle transitions for small UI changes (dialogs, row colours), with `prefers-reduced-motion` respected.
 - **Status colours:**
 
 | State | Look |
@@ -74,7 +77,7 @@ Overrides leave the weekly template untouched. Settings lists upcoming overrides
 | Check-out alarm offset (minutes relative to block end) | 0 | −60 … +30 |
 | Business-day rollover hour | 05:00 | 00:00 … 08:00 |
 | Start with Windows (shop PC) | on | — |
-| Quit code (Windows, see §8.1) | set at first run | exactly 4 digits |
+| Quit code (Windows, see §8.1; changed in the **Κωδικοί** section with the passphrase, §4.6) | set at first run | exactly 4 digits |
 
 The repeat cycle (ring 5 minutes, silent 5 minutes) is fixed in v1.
 
@@ -88,6 +91,7 @@ Settings lists today's marks. The employer can **remove** a mistaken mark, for e
 - **Format:** at least 5 words, each from the EFF large wordlist, separated by spaces. Input is normalised before checking: trimmed, lowercased, repeated spaces collapsed to one, Unicode NFC.
 - **Change passphrase:** needs the current passphrase plus the new one entered twice. Settings offers a **Generate** button that builds a 5-word passphrase using the OS's cryptographic random generator. A passphrase generated elsewhere (e.g. `tools/generate-passphrase.ps1` or dice) may be typed in instead.
 - Changing the passphrase signs out every admin session. Paired devices stay paired.
+- Settings show **Change passphrase** and **Change quit code** (§4.4) together, in one section named **Κωδικοί** (codes).
 - **Wrong attempts:**
   - after 5 consecutive wrong attempts on any device, attempts lock for 1 minute;
   - each further failure doubles the lock, up to 60 minutes;
@@ -113,7 +117,7 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
   - Tapping a **left** row does nothing.
   - There is no undo. Only the employer can correct marks (§4.5).
 - **Marks can be made at any time**, including before the scheduled time. A mark made before an alarm is due **prevents that alarm on every device** (§7.2).
-- **Empty state:** "Κανείς δεν δουλεύει σήμερα" (EN: "Nobody is working today").
+- **Empty state:** "Κανείς δεν δουλεύει σήμερα" ("Nobody is working today").
 - **Banners, shown only when relevant:**
   - offline, with the last sync time;
   - device clock off from server time by more than 2 minutes;
@@ -177,14 +181,14 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
 - Closing the window hides it to the tray. The tray menu has **Open** and **Quit**.
 - **Quit asks for the 4-digit quit code.**
   - The code only prevents accidental closing. It is **not** a security measure, and staff may know it.
-  - The employer sets it during the first-run setup on Windows and can change it in Settings.
+  - The employer sets it during the first-run setup on Windows and can change it in Settings → **Κωδικοί**.
   - It is synced with the other settings and checked locally, so it also works offline.
   - There is no lockout on wrong codes.
 - While the app runs, Windows is kept from idle-sleeping (manual sleep and shutdown are still possible).
 
 ### 8.2 Android (employer's phone)
 
-- **Per-device settings, no passphrase needed:** alert mode (**Ring** / **Notification**, default Ring), language and theme.
+- **Per-device settings, no passphrase needed:** alert mode (**Ring** / **Notification**, default Ring) and theme (the same four options as §3, default **Αυτόματο**; **Σύστημα** follows Android's dark-theme setting). The app is Greek only, so there is no language setting.
 - **First-run onboarding** walks through each required permission and the battery-optimisation exemption. It shows a live checklist (✓ / ✗) that is also available later in the menu. The wording must be clear enough for a non-technical person following instructions over the phone.
 - **Distribution:** a signed APK (not Google Play). New versions install over the old one and keep data and pairing.
 

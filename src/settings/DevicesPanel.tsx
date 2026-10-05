@@ -7,7 +7,7 @@ import { useAdmin } from "./admin";
 
 /** Settings → Devices: the paired devices; revoke one (SPEC §2). */
 export function DevicesPanel() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { view, run } = useAdmin();
   const [revoking, setRevoking] = useState<DeviceView | null>(null);
 
@@ -25,8 +25,8 @@ export function DevicesPanel() {
                 {d.name} {d.thisDevice && <span className="tag">{t("devices.thisDevice")}</span>}
               </p>
               <p className="list__detail">
-                {t(`devices.${d.platform}`)} · {t("devices.pairedAt", { when: formatStamp(d.pairedAt, null, i18n.language) })} ·{" "}
-                {d.lastSeen ? t("devices.lastSeen", { when: formatStamp(d.lastSeen, view.today, i18n.language) }) : t("devices.never")}
+                {t(`devices.${d.platform}`)} · {t("devices.pairedAt", { when: formatStamp(d.pairedAt, null) })} ·{" "}
+                {d.lastSeen ? t("devices.lastSeen", { when: formatStamp(d.lastSeen, view.today) }) : t("devices.never")}
               </p>
             </div>
             <div className="list__actions">

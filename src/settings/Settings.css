@@ -26,7 +26,6 @@
   padding: var(--space-1);
   border-radius: var(--radius-md);
   background: var(--surface);
-  backdrop-filter: blur(12px);
 }
 
 .tabs__tab {
@@ -55,6 +54,16 @@
 
 .settings__panel {
   min-height: 320px;
+}
+
+.panel-stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.panel-stack > * + * {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--surface-border);
 }
 
 .panel {

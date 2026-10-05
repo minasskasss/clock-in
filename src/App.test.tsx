@@ -1,16 +1,11 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import App from "./App";
-import { setLanguage } from "./i18n";
 import { setSystemPrefersDark } from "./test/setup";
 import { appState, mockCommands } from "./test/tauri";
 
 describe("App", () => {
-  beforeEach(async () => {
-    await setLanguage("el");
-  });
-
   it("shows the Greek first-run choices on an unpaired device, with the background", async () => {
     mockCommands({ app_state: appState({ phase: "unpaired", today: null }) });
     render(<App />);
@@ -28,21 +23,30 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Λείπουν οι ρυθμίσεις διακομιστή" })).toBeInTheDocument();
   });
 
-  it("switches the language to English from the menu and back", async () => {
+  it("is Greek only: the menu has no language choice", async () => {
     mockCommands({ app_state: appState({ today: { businessDate: "2026-10-05", clock: "11:42", rows: [] } }) });
     const user = userEvent.setup();
     render(<App />);
     expect(await screen.findByText("Κανείς δεν δουλεύει σήμερα")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Μενού" }));
-    await user.click(screen.getByRole("button", { name: "English" }));
-    expect(screen.getByText("Nobody is working today")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Monday");
-    expect(screen.getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(screen.getByRole("button", { name: "Ελληνικά" }));
-    expect(screen.getByText("Κανείς δεν δουλεύει σήμερα")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Δευτέρα");
+    await user.click(screen.getByRole("button", { name: "Μενού" }));
+    expect(screen.queryByText("Γλώσσα")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /English/ })).not.toBeInTheDocument();
+    for (const name of ["Αυτόματο", "Σύστημα", "Φωτεινό", "Σκοτεινό"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("button", { name: "Αυτόματο" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("'Αυτόματο' follows Rust's answer live, without a restart", async () => {
+    let autoDark = true;
+    mockCommands({ app_state: () => appState({ autoDark }) });
+    render(<App />);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+    autoDark = false;
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"), { timeout: 2500 });
+    // Remembered, so a restart at night starts dark at once.
+    expect(window.localStorage.getItem("clockin.theme.autoDark")).toBe("light");
   });
 
   it("switches between light and dark from the menu", async () => {
@@ -61,7 +65,8 @@ describe("App", () => {
   });
 
   it("follows live system theme changes while set to 'System'", () => {
-    mockCommands({ app_state: appState() });
+    window.localStorage.setItem("clockin.theme", "system");
+    mockCommands({ app_state: appState({ autoDark: true }) });
     render(<App />);
     expect(document.documentElement.dataset.theme).toBe("light");
     act(() => setSystemPrefersDark(true));
@@ -89,6 +94,12 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Μενού" }));
     expect(screen.getByText("Προφίλ: b")).toBeInTheDocument();
     expect(screen.getByText("Ενεργό: 2026-10-25 03:30")).toBeInTheDocument();
+    const box = screen.getByLabelText("Ψεύτικο ρολόι (ώρα Ελλάδας)");
+    expect(box).toHaveValue("2026-10-25 03:30");
+    await user.clear(box);
+    await user.type(box, "2026-10-05 21:00");
+    await user.click(screen.getByRole("button", { name: "Ορισμός" }));
+    expect(calls.some((c) => c.command === "debug_set_clock" && c.args?.local === "2026-10-05 21:00")).toBe(true);
     await user.click(screen.getByRole("button", { name: "Πραγματική ώρα" }));
     expect(calls.some((c) => c.command === "debug_set_clock" && c.args?.local === null)).toBe(true);
   });

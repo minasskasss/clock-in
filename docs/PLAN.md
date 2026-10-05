@@ -22,7 +22,7 @@
   - `target/`, `node_modules/`, `dist/`.
 - Set up the Cargo workspace (`crates/clockin-core`, `src-tauri`, `plugins/clockin-alarm` stub, `tools/gen-sounds`).
 - Set up the Tauri 2 + React + TS + Vite app with pnpm.
-- Configure i18n (el default, en).
+- Configure i18n (el default, en). *(Phase 3: English was dropped; the app is Greek only.)*
 - Add theme tokens: CSS variables for light and dark, plus the background treatment from SPEC §3.
 - Add `.env.example`.
 - Add GitHub Actions on PRs:
@@ -91,12 +91,12 @@ Then build:
   - weekly schedule editor with split shifts and "(+1)" display;
   - overrides (day off / replace hours);
   - offsets and rollover;
-  - quit code;
   - Today's marks (remove a mistaken mark);
   - devices (revoke);
-  - change passphrase with **Generate**;
+  - a **Κωδικοί** section: change passphrase with **Generate**, and change quit code;
   - lockout UI.
-- **Menu:** language, theme.
+- **Menu:** theme (Αυτόματο, Σύστημα, Φωτεινό, Σκοτεινό). Greek only, no language choice.
+- **Static background:** no background animation, cheap to draw (SPEC §3).
 - **Debug only:** `--profile` second instance and the fake-clock offset.
 
 **Checklist (Minas, on his laptop, dev project):**
@@ -112,8 +112,8 @@ Then build:
 9. In Settings → Today's marks, remove A's "left" mark → the red line disappears on both instances.
 10. Enter the wrong passphrase 5 times → locked with a countdown. Restart the app → still locked.
 11. Change the passphrase → the old one fails and the new one works. Generate a passphrase → it is 5 words.
-12. Change the quit code in Settings → it saves.
-13. Switch the language to English and back. Switch the theme to dark and light.
+12. Change the quit code in Settings → **Κωδικοί** → it saves.
+13. Switch the theme between Αυτόματο, Σύστημα, Φωτεινό and Σκοτεινό. With the fake clock, Αυτόματο turns dark at 21:00 and light at the rollover. There is no English anywhere.
 14. Revoke instance 2 from instance 1 → instance 2 shows the pairing screen.
 15. Try to make an override for yesterday and an overlapping block → both are refused with a clear message.
 
@@ -161,7 +161,8 @@ Then build:
 - Tauri Android target;
 - the full Kotlin plugin from ARCHITECTURE §10;
 - onboarding checklist;
-- per-device alert-mode setting.
+- per-device alert-mode setting;
+- per-device theme, the same as Windows (SPEC §3, §8.2): Αυτόματο by default (the rule comes from `clockin-core`), Σύστημα following Android's dark theme, Φωτεινό, Σκοτεινό; the same static background.
 
 The test phone is paired to **dev** during development.
 

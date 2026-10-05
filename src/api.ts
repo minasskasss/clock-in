@@ -56,6 +56,8 @@ export interface AppStateView {
   banners: Banners;
   adminUnlocked: boolean;
   dataVersion: number;
+  /** Whether the automatic theme is dark right now (decided in Rust). */
+  autoDark: boolean;
 }
 
 export interface BlockView {

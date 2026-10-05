@@ -11,7 +11,7 @@ import { BlockList } from "./BlockList";
 import { newUid, type EditBlock } from "./blocks";
 
 export function OverridesPanel() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { view, run } = useAdmin();
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<OverrideView | null>(null);
@@ -33,7 +33,7 @@ export function OverridesPanel() {
             <li key={o.id} className="list__item">
               <div className="list__main">
                 <p className="list__title">
-                  {formatShortDate(o.businessDate, i18n.language)} · {o.firstName} {o.lastName}
+                  {formatShortDate(o.businessDate)} · {o.firstName} {o.lastName}
                 </p>
                 <p className="list__detail">
                   {o.kind === "off" ? t("overrides.off") : o.blocks.map((b) => formatHours(t, b)).join(", ")}
@@ -60,7 +60,7 @@ export function OverridesPanel() {
           <p>
             {t("overrides.deleteBody", {
               name: `${deleting.firstName} ${deleting.lastName}`,
-              date: formatShortDate(deleting.businessDate, i18n.language),
+              date: formatShortDate(deleting.businessDate),
             })}
           </p>
         </Confirm>

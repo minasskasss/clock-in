@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
+import "../i18n";
 
 // No Tauri in tests: every command goes through a mock (see `mockCommands`).
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));

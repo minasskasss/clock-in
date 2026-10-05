@@ -12,6 +12,7 @@
 //! - [`due_events`] / [`next_event`]: alarms grouped by minute, suppressed by marks.
 //! - [`ring_cycle_state`]: the ring 5 min / silent 5 min repeat cycle.
 //! - [`validate_week`] / [`validate_override`]: durations and overlaps.
+//! - [`auto_theme_is_dark`]: the automatic light/dark theme.
 
 mod admin;
 mod business_day;
@@ -23,6 +24,7 @@ mod plan;
 mod ring;
 mod shop_time;
 mod sync;
+mod theme;
 mod today;
 mod validate;
 
@@ -59,6 +61,7 @@ pub use sync::{
     HORIZON_WARNING_BELOW, MAX_CLOCK_SKEW, PLAN_REFRESH_BELOW, POLL_INTERVAL, clock_skew_exceeded,
     horizon_short, plan_needs_refresh, sync_retry_delay,
 };
+pub use theme::{AUTO_DARK_FROM, auto_theme_is_dark};
 pub use today::{RowStatus, TodayRow, TodayView, has_mark, today_view};
 pub use validate::{
     BlockIssue, BlockProblem, DayBlock, MAX_BLOCK_MINUTES, MAX_NAME_CHARS, MAX_OFFSET_MINUTES,

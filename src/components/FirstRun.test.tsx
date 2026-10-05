@@ -1,17 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setLanguage } from "../i18n";
+import { describe, expect, it, vi } from "vitest";
 import { callsTo, mockCommands } from "../test/tauri";
 import { FirstRun } from "./FirstRun";
 
 const GOOD = "abacus abdomen abdominal abide abiding";
 
 describe("First run", () => {
-  beforeEach(async () => {
-    await setLanguage("el");
-  });
-
   it("sets up the first device only with a valid, repeated passphrase and quit code", async () => {
     const calls = mockCommands({
       check_new_passphrase: (args: { passphrase: string }) => {

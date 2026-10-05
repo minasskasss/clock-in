@@ -13,8 +13,8 @@ import { useAppState } from "./useAppState";
 
 export default function App() {
   const { t } = useTranslation();
-  const [theme, setTheme] = useTheme();
   const { state, failed, refresh } = useAppState();
+  const [theme, setTheme] = useTheme(state?.autoDark ?? null);
   const [screen, setScreen] = useState<"today" | "settings">("today");
   const [unlocking, setUnlocking] = useState(false);
 

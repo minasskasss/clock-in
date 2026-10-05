@@ -1,17 +1,12 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setLanguage } from "../i18n";
+import { describe, expect, it, vi } from "vitest";
 import { callsTo, mockCommands, row, today } from "../test/tauri";
 import { Today } from "./Today";
 
 const noBanners = { offline: false, lastSync: null, clockSkew: false, horizonShort: false };
 
 describe("Today view", () => {
-  beforeEach(async () => {
-    await setLanguage("el");
-  });
-
   it("shows the header, every row with its hours and status, and (+1) after midnight", () => {
     render(
       <Today

@@ -1,101 +1,19 @@
 /*
- * Soft atmospheric background: large blurred gradient shapes drifting very
- * slowly, with a subtle grain on top (SPEC §3). Only `transform` is animated,
- * so it stays on the compositor; the drift stops under prefers-reduced-motion.
+ * Soft, warm background (SPEC §3). It never moves and is painted once: a few
+ * large radial gradients, with no blur filter, blend mode or animation, so an
+ * idle Today view only repaints the clock digits once a minute and the GPU
+ * stays idle (the shop PC runs this all day).
  */
 .background {
   position: fixed;
   inset: 0;
   z-index: -1;
-  overflow: hidden;
   pointer-events: none;
-  background: var(--bg);
-  transition: background-color var(--duration) var(--ease-out);
-}
-
-.background__blob {
-  position: absolute;
-  width: 62vmax;
-  height: 62vmax;
-  border-radius: 50%;
-  opacity: var(--blob-opacity);
-  filter: blur(80px);
-  will-change: transform;
-  transition: background-color 600ms var(--ease-out);
-}
-
-.background__blob--1 {
-  top: -24vmax;
-  left: -18vmax;
-  background: radial-gradient(circle at 40% 40%, var(--blob-1), transparent 68%);
-  animation: drift-a 70s ease-in-out infinite alternate;
-}
-
-.background__blob--2 {
-  top: -18vmax;
-  right: -22vmax;
-  background: radial-gradient(circle at 60% 40%, var(--blob-2), transparent 66%);
-  animation: drift-b 90s ease-in-out infinite alternate;
-}
-
-.background__blob--3 {
-  bottom: -28vmax;
-  left: 6vmax;
-  background: radial-gradient(circle at 50% 50%, var(--blob-3), transparent 66%);
-  animation: drift-c 80s ease-in-out infinite alternate;
-}
-
-.background__blob--4 {
-  bottom: -26vmax;
-  right: -14vmax;
-  width: 48vmax;
-  height: 48vmax;
-  background: radial-gradient(circle at 50% 50%, var(--blob-4), transparent 66%);
-  animation: drift-a 100s ease-in-out infinite alternate-reverse;
-}
-
-.background__grain {
-  position: absolute;
-  inset: 0;
-  opacity: var(--grain-opacity);
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 220px 220px;
-}
-
-:root[data-theme="dark"] .background__grain {
-  mix-blend-mode: soft-light;
-}
-
-@keyframes drift-a {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(6vmax, 4vmax, 0) scale(1.08);
-  }
-}
-
-@keyframes drift-b {
-  from {
-    transform: translate3d(0, 0, 0) scale(1.05);
-  }
-  to {
-    transform: translate3d(-5vmax, 6vmax, 0) scale(0.95);
-  }
-}
-
-@keyframes drift-c {
-  from {
-    transform: translate3d(0, 0, 0) scale(0.96);
-  }
-  to {
-    transform: translate3d(5vmax, -5vmax, 0) scale(1.06);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .background__blob {
-    animation: none;
-  }
+  contain: strict;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle 46vmax at 8% 6%, var(--blob-1), transparent),
+    radial-gradient(circle 42vmax at 96% 8%, var(--blob-2), transparent),
+    radial-gradient(circle 44vmax at 28% 104%, var(--blob-3), transparent),
+    radial-gradient(circle 36vmax at 98% 98%, var(--blob-4), transparent);
 }

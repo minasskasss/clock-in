@@ -58,9 +58,9 @@
 C:\dev\clock-in\
   CLAUDE.md
   docs/                        SPEC, ARCHITECTURE, PLAN, DECISIONS, SETUP, IDEAS, RECOVERY
-  crates/clockin-core/         pure logic: schedules, business day, plan, validation
+  crates/clockin-core/         pure logic: schedules, business day, plan, validation, automatic theme
   crates/clockin-sync/         RPC client, SQLCipher store, sync-loop logic (no Tauri)
-  src/                         React + TS UI (i18n in src/i18n/{el,en}.json)
+  src/                         React + TS UI; Greek only, every string in src/i18n/el.json
   src-tauri/                   Tauri app (Rust): sync loop, secrets, admin session, commands; scheduler, audio, tray (Phase 4)
   plugins/clockin-alarm/       Tauri plugin: Rust side + android/ (Kotlin)
   supabase/migrations/         SQL migrations (schema, functions, grants, cron)

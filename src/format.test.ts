@@ -27,10 +27,9 @@ describe("format", () => {
   });
 
   it("formats civil dates the same in any device timezone", () => {
-    expect(formatLongDate("2026-10-25", "el")).toEqual({ weekday: "Κυριακή", date: "25 Οκτωβρίου" });
-    expect(formatLongDate("2026-10-25", "en")).toEqual({ weekday: "Sunday", date: "25 October" });
-    expect(formatStamp({ date: "2026-10-05", time: "14:03" }, "2026-10-05", "en")).toBe("14:03");
-    expect(formatStamp({ date: "2026-10-04", time: "14:03" }, "2026-10-05", "en")).toBe("4 Oct 14:03");
+    expect(formatLongDate("2026-10-25")).toEqual({ weekday: "Κυριακή", date: "25 Οκτωβρίου" });
+    expect(formatStamp({ date: "2026-10-05", time: "14:03" }, "2026-10-05")).toBe("14:03");
+    expect(formatStamp({ date: "2026-10-04", time: "14:03" }, "2026-10-05")).toMatch(/^4 Οκτ\S* 14:03$/);
   });
 
   it("turns command errors into plain messages", () => {
