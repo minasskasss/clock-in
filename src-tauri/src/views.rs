@@ -100,6 +100,8 @@ pub struct Banners {
     pub last_sync: Option<LocalStamp>,
     pub clock_skew: bool,
     pub horizon_short: bool,
+    /// Windows sound output muted, at zero or missing.
+    pub sound_off: bool,
 }
 
 #[must_use]
@@ -111,6 +113,7 @@ pub fn banners(status: &SyncStatus, now: Timestamp) -> Banners {
         // Offline, a known horizon still counts; an unknown one is unknown.
         horizon_short: (status.online || status.plan_horizon_end.is_some())
             && clockin_core::horizon_short(status.plan_horizon_end, now),
+        sound_off: false,
     }
 }
 

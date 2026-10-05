@@ -13,8 +13,8 @@ use crate::profile::Profile;
 use crate::secrets::SecretStore;
 use crate::views;
 use clockin_core::{
-    MarkKind, admin_idle_expired, check_passphrase, is_valid_quit_code, lockout_until,
-    normalize_passphrase, same_passphrase, seconds_until,
+    AlarmKey, MarkKind, Snapshot, admin_idle_expired, check_passphrase, is_valid_quit_code,
+    lockout_until, normalize_passphrase, same_passphrase, seconds_until,
 };
 use clockin_sync::{
     Api, ApiError, DeviceSecret, MarkRequest, Pairing as ServerPairing, Platform, QuitCode,
@@ -35,9 +35,14 @@ use uuid::Uuid;
 const SECRET_DEVICE: &str = "device-secret";
 const SECRET_STORE_KEY: &str = "store-key";
 const SETTING_LOCKOUT_UNTIL: &str = "lockout_until";
+/// Alarms this device already rang and that were stopped or ended.
+const SETTING_ALARMS_HANDLED: &str = "alarms_handled";
 const DB_FILE: &str = "local.db";
 /// How long an admin call waits for the sync round that shows its result.
 const SYNC_WAIT: Duration = Duration::from_secs(10);
+/// How long an alarm about to ring waits for fresh marks (ARCHITECTURE §9:
+/// local state at most a few seconds old; offline it rings anyway).
+const ALARM_SYNC_WAIT: Duration = Duration::from_secs(3);
 
 #[cfg(target_os = "android")]
 const PLATFORM: Platform = Platform::Android;
@@ -76,10 +81,10 @@ impl SyncControl {
     }
 
     /// Waits until a round that started after `ticket` was requested has
-    /// finished (or the loop stopped), at most [`SYNC_WAIT`].
-    async fn wait(&self, ticket: u64) {
+    /// finished (or the loop stopped), at most `limit`.
+    async fn wait(&self, ticket: u64, limit: Duration) {
         let mut done = self.done.subscribe();
-        let _ = tokio::time::timeout(SYNC_WAIT, done.wait_for(|d| *d >= ticket)).await;
+        let _ = tokio::time::timeout(limit, done.wait_for(|d| *d >= ticket)).await;
     }
 
     fn finish(&self) {
@@ -129,6 +134,10 @@ pub struct AppState {
     pairing: Mutex<Option<Pairing>>,
     published: RwLock<Published>,
     admin: Mutex<AdminState>,
+    /// Wakes the alarm scheduler: new data, a mark, a clock change, Stop.
+    pub alarm_wake: Notify,
+    /// Windows output muted, at zero or missing (the banner).
+    sound_off: AtomicBool,
 }
 
 /// Where the app is.
@@ -196,6 +205,8 @@ impl AppState {
                 session: None,
                 lockout_until,
             }),
+            alarm_wake: Notify::new(),
+            sound_off: AtomicBool::new(false),
         };
         Ok((state, secret))
     }
@@ -269,6 +280,8 @@ impl AppState {
         published
             .in_flight
             .retain(|m| pending.contains(&m.client_id));
+        drop(published);
+        self.alarm_wake.notify_one();
     }
 
     /// The server no longer knows this device: back to the pairing screen.
@@ -294,6 +307,8 @@ impl AppState {
         {
             *pairing = None;
         }
+        drop(pairing);
+        self.alarm_wake.notify_one();
     }
 
     /// Makes the sync loop run now (for a mark: no waiting).
@@ -308,6 +323,7 @@ impl AppState {
         let done = self.clock.set_fake(target);
         if done {
             self.sync_soon();
+            self.alarm_wake.notify_one();
         }
         done
     }
@@ -320,6 +336,18 @@ impl AppState {
     ///
     /// If the local queue can't be read.
     pub fn today(&self) -> Result<Option<views::TodayView>, CmdError> {
+        Ok(self
+            .core_snapshot()?
+            .map(|core| views::today(&core, self.clock.now())))
+    }
+
+    /// The last server data plus every mark made on this device that the
+    /// server hasn't confirmed yet, or `None` before the first snapshot.
+    ///
+    /// # Errors
+    ///
+    /// If the local queue can't be read.
+    pub fn core_snapshot(&self) -> Result<Option<Snapshot>, CmdError> {
         let published = self
             .published
             .read()
@@ -330,7 +358,7 @@ impl AppState {
         let mut core = core_snapshot_with_pending(snapshot, &lock(&self.ui_store))?;
         core.marks
             .extend(published.in_flight.iter().map(MarkRequest::core));
-        Ok(Some(views::today(&core, self.clock.now())))
+        Ok(Some(core))
     }
 
     #[must_use]
@@ -339,11 +367,18 @@ impl AppState {
             .published
             .read()
             .unwrap_or_else(PoisonError::into_inner);
-        published
+        let mut banners = published
             .status
             .as_ref()
             .map(|s| views::banners(s, self.clock.now()))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        banners.sound_off = self.sound_off.load(Ordering::Relaxed);
+        banners
+    }
+
+    /// Records whether Windows sound output is muted, at zero or missing.
+    pub fn set_sound_off(&self, off: bool) {
+        self.sound_off.store(off, Ordering::Relaxed);
     }
 
     /// Changes whenever the server data changed (the Settings lists reload).
@@ -438,6 +473,8 @@ impl AppState {
                 }
             }
         }
+        // A ringing alarm drops this name at once.
+        self.alarm_wake.notify_one();
         pairing.sync.request();
         Ok(())
     }
@@ -651,7 +688,7 @@ impl AppState {
             Ok(value) => {
                 self.admin_touch();
                 let ticket = pairing.sync.request();
-                pairing.sync.wait(ticket).await;
+                pairing.sync.wait(ticket, SYNC_WAIT).await;
                 Ok(value)
             }
             Err(e) => {
@@ -697,6 +734,62 @@ impl AppState {
     #[must_use]
     pub fn current_quit_code(&self) -> Option<QuitCode> {
         self.with_snapshot(|s| s.and_then(|s| s.settings.quit_code.clone()))
+    }
+
+    // --- Windows: quitting, autostart, alarms ------------------------------
+
+    /// Whether `typed` lets the app quit (SPEC §8.1): the synced quit code,
+    /// compared on this device so it works offline. Before a quit code is
+    /// known (not paired yet, or never synced) there is nothing to protect
+    /// and any answer quits.
+    #[must_use]
+    pub fn quit_allowed(&self, typed: &str) -> bool {
+        self.current_quit_code()
+            .is_none_or(|code| code.expose() == typed)
+    }
+
+    /// Whether a quit code is known (else Quit only asks for confirmation).
+    #[must_use]
+    pub fn quit_code_set(&self) -> bool {
+        self.current_quit_code().is_some()
+    }
+
+    /// The "Start with Windows" setting; on (the default, SPEC §4.4) until
+    /// the first sync.
+    #[must_use]
+    pub fn autostart_wanted(&self) -> bool {
+        self.with_snapshot(|s| s.is_none_or(|s| s.settings.autostart))
+    }
+
+    /// The alarms this device already rang and that were stopped or ended.
+    #[must_use]
+    pub fn handled_alarms(&self) -> Vec<AlarmKey> {
+        lock(&self.ui_store)
+            .device_setting(SETTING_ALARMS_HANDLED)
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save_handled_alarms(&self, keys: &[AlarmKey]) {
+        let Ok(json) = serde_json::to_string(keys) else {
+            return;
+        };
+        if let Err(e) =
+            lock(&self.ui_store).set_device_setting(SETTING_ALARMS_HANDLED, &json, Timestamp::now())
+        {
+            eprintln!("clock-in: could not save the stopped alarms: {e}");
+        }
+    }
+
+    /// Before an alarm rings: one sync round for the latest marks, at most a
+    /// few seconds (offline it gives up and the alarm rings: fail loud).
+    pub async fn refresh_for_alarm(&self) {
+        if let Ok(pairing) = self.pairing() {
+            let ticket = pairing.sync.request();
+            pairing.sync.wait(ticket, ALARM_SYNC_WAIT).await;
+        }
     }
 }
 

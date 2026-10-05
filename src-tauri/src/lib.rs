@@ -1,8 +1,12 @@
 //! Clock In app core: Tauri setup, the sync loop and the commands the UI
 //! calls. The sync client and local store live in `clockin-sync`, all time
-//! logic in `clockin-core`. The alarm scheduler, audio and tray arrive in
-//! Phase 4 (see `docs/PLAN.md`).
+//! logic in `clockin-core`. On Windows the app also runs the alarm scheduler,
+//! the alarm window and sound, the tray, keep-awake and start-with-Windows
+//! (ARCHITECTURE §9).
 
+mod alarms;
+mod audio;
+mod autostart;
 mod clock;
 mod commands;
 pub mod config;
@@ -10,14 +14,22 @@ mod drafts;
 #[cfg(test)]
 mod e2e;
 mod error;
+mod i18n;
 mod passgen;
+#[cfg(windows)]
+mod power;
 mod profile;
 mod secrets;
 mod state;
+#[cfg(desktop)]
+mod tray;
 mod views;
+#[cfg(windows)]
+mod volume;
 #[cfg(windows)]
 mod window_icon;
 
+use crate::alarms::Alarms;
 use crate::profile::Profile;
 use crate::secrets::PlatformSecrets;
 use crate::state::AppState;
@@ -44,25 +56,68 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .start_sync(secret)
             .map_err(|e| format!("Clock In could not start syncing: {e:?}"))?;
     }
-    app.manage(state);
+    app.manage(Arc::clone(&state));
 
     let title = match profile.name() {
-        None => "Clock In".to_owned(),
-        Some(name) => format!("Clock In ({name})"),
+        None => i18n::text("app.name"),
+        Some(name) => format!("{} ({name})", i18n::text("app.name")),
     };
+    // A debug profile keeps its own webview data (theme) next to its database.
+    let webview_dir = profile.name().map(|_| data_dir.join("webview"));
     let mut window = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
         .title(title)
         .inner_size(1100.0, 760.0)
         .min_inner_size(480.0, 560.0)
-        .center();
-    if profile.name().is_some() {
-        // Its own webview data (language, theme) next to its own database.
-        window = window.data_directory(data_dir.join("webview"));
+        .center()
+        // Started at login: straight to the tray (PLAN Phase 4, item 8).
+        .visible(!autostart::started_at_login());
+    if let Some(dir) = &webview_dir {
+        window = window.data_directory(dir.clone());
     }
-    let _window = window.build()?;
+    let window = window.build()?;
     #[cfg(windows)]
-    window_icon::apply(_window.hwnd()?.0, _window.scale_factor()?);
+    window_icon::apply(window.hwnd()?.0, window.scale_factor()?);
+
+    let alarms = Arc::new(Alarms::new(&state, webview_dir));
+    app.manage(Arc::clone(&alarms));
+
+    #[cfg(desktop)]
+    {
+        tray::create(app, window.scale_factor()?)?;
+        // Only the installed app registers itself, never a debug build or
+        // a second debug profile.
+        let manage_autostart = !cfg!(debug_assertions) && profile.name().is_none();
+        alarms::start(
+            app.handle().clone(),
+            Arc::clone(&state),
+            alarms,
+            manage_autostart,
+        );
+    }
+    #[cfg(not(desktop))]
+    let _ = (window, alarms);
+
+    #[cfg(windows)]
+    {
+        // setup() runs on the main thread, which lives as long as the app.
+        power::keep_awake();
+        start_sound_check(Arc::clone(&state));
+    }
     Ok(())
+}
+
+/// Windows: checks every 30 s whether alarms would be heard (SPEC §6 banner).
+#[cfg(windows)]
+fn start_sound_check(state: Arc<AppState>) {
+    let _ = std::thread::Builder::new()
+        .name("clock-in-volume".into())
+        .spawn(move || {
+            volume::init_thread();
+            loop {
+                state.set_sound_off(volume::sound_off());
+                std::thread::sleep(std::time::Duration::from_secs(30));
+            }
+        });
 }
 
 /// Builds and runs the Tauri application.
@@ -72,16 +127,35 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 /// Panics if the Tauri runtime cannot start (e.g. no webview available).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+    // One instance only (SPEC §8.1): starting it again shows the window. A
+    // debug `--profile` instance may run beside the default one.
+    #[cfg(desktop)]
+    if Profile::from_args().name().is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tray::show_main(app);
+        }));
+    }
+    builder
         .plugin(tauri_plugin_clockin_alarm::init())
         .setup(setup)
-        .on_window_event(|_window, _event| {
-            #[cfg(windows)]
-            if let tauri::WindowEvent::ScaleFactorChanged { scale_factor, .. } = _event
-                && let Ok(hwnd) = _window.hwnd()
-            {
-                window_icon::apply(hwnd.0, *scale_factor);
+        .on_window_event(|window, event| match event {
+            #[cfg(desktop)]
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                // Closing hides the main window to the tray; the alarm window
+                // closes only through Stop. Quitting needs the quit code.
+                api.prevent_close();
+                if window.label() == tray::MAIN {
+                    let _ = window.hide();
+                }
             }
+            #[cfg(windows)]
+            tauri::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                if let Ok(hwnd) = window.hwnd() {
+                    window_icon::apply(hwnd.0, *scale_factor);
+                }
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_state,
@@ -104,6 +178,9 @@ pub fn run() {
             commands::device_revoke,
             commands::change_passphrase,
             commands::generate_passphrase,
+            commands::alarm_state,
+            commands::alarm_stop,
+            commands::quit,
             commands::debug_set_clock,
         ])
         .run(tauri::generate_context!())
