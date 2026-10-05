@@ -117,10 +117,21 @@ async fn connect_db(config: &ServerConfig) -> tokio_postgres::Client {
     );
     pg.ssl_mode(tokio_postgres::config::SslMode::Require);
     let tls = tokio_postgres_rustls::MakeRustlsConnect::new(db_tls());
-    let (client, connection) = pg
-        .connect(tls)
-        .await
-        .unwrap_or_else(|e| panic!("cannot connect to the dev database: {e}"));
+    // On failure, print only the SQLSTATE of a server error (its text can
+    // name the database user) or the transport cause (TLS, network). The
+    // connection string is never formatted anywhere.
+    let (client, connection) = pg.connect(tls).await.unwrap_or_else(|e| {
+        match (e.as_db_error(), std::error::Error::source(&e)) {
+            (Some(db), _) => panic!(
+                "cannot connect to the dev database: server error {}",
+                db.code().code()
+            ),
+            (None, Some(cause)) if !e.is_closed() => {
+                panic!("cannot connect to the dev database: {cause}")
+            }
+            _ => panic!("cannot connect to the dev database"),
+        }
+    });
     tokio::spawn(async move {
         let _ = connection.await;
     });
@@ -223,6 +234,10 @@ impl Dev {
     }
 
     async fn i64(&self, sql: &str) -> i64 {
+        self.db.query_one(sql, &[]).await.unwrap().get(0)
+    }
+
+    async fn text(&self, sql: &str) -> String {
         self.db.query_one(sql, &[]).await.unwrap().get(0)
     }
 
@@ -406,6 +421,59 @@ async fn app_schema_is_unreachable_and_locked_down() {
         )
         .await,
         0
+    );
+    // No function in app or public is executable by PUBLIC: each has an
+    // explicit ACL (NULL would mean the default, which includes PUBLIC) with
+    // no PUBLIC entry. Helpers are executable by no API role (checked above).
+    assert_eq!(
+        dev.i64(
+            "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname in ('app', 'public')
+                and (p.proacl is null
+                     or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0))"
+        )
+        .await,
+        0
+    );
+    // Only admin_initialize and pair_device take no device secret.
+    let public_rpcs = |filter: &str| {
+        format!(
+            "select coalesce(string_agg(p.proname, ',' order by p.proname), '')
+               from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'public' and {filter}"
+        )
+    };
+    assert_eq!(
+        dev.text(&public_rpcs("coalesce(p.proargnames[1], '') <> 'p_secret'"))
+            .await,
+        "admin_initialize,pair_device"
+    );
+    assert_eq!(
+        dev.text(&public_rpcs("p.proargnames[2] = 'p_session'"))
+            .await,
+        [
+            "admin_logout,change_passphrase,device_revoke,mark_void,override_delete,",
+            "override_set,schedule_set,settings_update,staff_create,staff_remove,staff_update",
+        ]
+        .concat()
+    );
+    // Every RPC that takes a secret checks it (admin RPCs: with the session).
+    assert_eq!(
+        dev.text(&public_rpcs(
+            "p.proargnames[1] = 'p_secret'
+             and p.prosrc not like '%app.auth_device(p_secret)%'
+             and p.prosrc not like '%app.auth_admin(p_secret, p_session)%'"
+        ))
+        .await,
+        ""
+    );
+    assert_eq!(
+        dev.text(&public_rpcs(
+            "p.proargnames[2] = 'p_session' and p.proname <> 'admin_logout'
+             and p.prosrc not like '%app.auth_admin(p_secret, p_session)%'"
+        ))
+        .await,
+        ""
     );
 }
 
@@ -1040,6 +1108,23 @@ async fn admin_data_changes() {
     let monday = id_of(&snap, Weekday::Monday).unwrap();
     let wednesday = id_of(&snap, Weekday::Wednesday).unwrap();
 
+    // Marks made before the edit (the server doesn't check the weekday).
+    let today = dev.business_today().await;
+    for block in [monday, wednesday] {
+        api.mark(
+            secret,
+            &MarkRequest {
+                client_id: Uuid::new_v4(),
+                staff_id: staff,
+                source_block_id: block,
+                business_date: today,
+                kind: MarkKind::In,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
     // Edit Monday by id, keep Wednesday unchanged without an id, add Friday.
     let new_week = vec![
         WeekBlockInput {
@@ -1070,6 +1155,19 @@ async fn admin_data_changes() {
     assert_eq!(id_of(&snap, Weekday::Wednesday), Some(wednesday));
     let mon = snap.blocks.iter().find(|b| b.id == monday).unwrap();
     assert_eq!((mon.start, mon.end), (t(10, 0), t(17, 0)));
+    // Both marks still point at a block that exists: edited (Monday) and
+    // unchanged (Wednesday) blocks kept their ids.
+    assert_eq!(snap.marks.len(), 2);
+    for mark in &snap.marks {
+        assert!(
+            snap.blocks.iter().any(|b| b.id == mark.source_block_id),
+            "a mark lost its block"
+        );
+    }
+    let core = snap.core_snapshot(&[]);
+    for block in [monday, wednesday] {
+        assert!(core.marks.iter().any(|m| m.source_block_id == block));
+    }
 
     // Dropping a block deletes it.
     api.schedule_set(secret, &session, staff, &new_week[..1])
@@ -1113,7 +1211,6 @@ async fn admin_data_changes() {
     );
 
     // Overrides: today or later only; off has no blocks, replace has some.
-    let today = dev.business_today().await;
     let yesterday = today.yesterday().unwrap();
     let tomorrow = today.tomorrow().unwrap();
     let replacement = [
@@ -1438,7 +1535,7 @@ async fn purge_removes_only_expired_data() {
         api.staff_remove(secret, &session, id).await.unwrap();
     }
     dev.exec(&format!(
-        "update app.staff set removed_at = now() - interval '3 days' where id in ('{gone}', '{gone_with_marks}');
+        "update app.staff set removed_at = now() - interval '4 days' where id in ('{gone}', '{gone_with_marks}');
          insert into app.marks (id, staff_id, source_block_id, business_date, kind) values
            (gen_random_uuid(), '{active}', gen_random_uuid(), app.business_today() - 30, 'in'),
            (gen_random_uuid(), '{active}', gen_random_uuid(), app.business_today() - 31, 'out'),
@@ -1488,6 +1585,82 @@ async fn purge_removes_only_expired_data() {
         .await,
         1
     );
+}
+
+/// A removed person is purged only once their removal is older than the
+/// snapshot window and no mark references them, so nobody the devices can
+/// still see (e.g. someone removed mid-shift today) is ever deleted.
+#[tokio::test]
+#[ignore = "uses the dev Supabase project"]
+async fn purge_keeps_removed_staff_inside_the_snapshot_window() {
+    let dev = dev().await;
+    let api = &dev.api;
+    let (pc, passphrase) = dev.init().await;
+    let secret = &pc.device_secret;
+    let session = dev.login(&pc, &passphrase).await;
+    let blocks = week(&[(Weekday::Monday, t(19, 0), t(2, 0))]);
+
+    // (first name, removed this long ago, has a mark in the window)
+    let cases = [
+        ("Σήμερα", "1 hour", false),
+        ("Χθες", "1 day", false),
+        ("Σχεδόν", "2 days 23 hours", false),
+        ("Παλιός", "3 days 1 minute", false),
+        ("Σημάδι", "3 days 1 minute", true),
+    ];
+    let mut ids = Vec::new();
+    for (name, ago, with_mark) in cases {
+        let id = api
+            .staff_create(secret, &session, name, "Δοκιμή", &blocks)
+            .await
+            .unwrap();
+        api.staff_remove(secret, &session, id).await.unwrap();
+        dev.exec(&format!(
+            "update app.staff set removed_at = now() - interval '{ago}' where id = '{id}'"
+        ))
+        .await;
+        if with_mark {
+            dev.exec(&format!(
+                "insert into app.marks (id, staff_id, source_block_id, business_date, kind)
+                 values (gen_random_uuid(), '{id}', gen_random_uuid(), app.business_today() - 1, 'in')"
+            ))
+            .await;
+        }
+        ids.push(id);
+    }
+
+    let in_snapshot =
+        |snap: &clockin_sync::ServerSnapshot, id: Uuid| snap.staff.iter().any(|s| s.id == id);
+    let before = api.get_snapshot(secret).await.unwrap();
+    for (i, (name, _, _)) in cases.iter().enumerate() {
+        let expected = *name != "Παλιός";
+        assert_eq!(in_snapshot(&before, ids[i]), expected, "{name} in snapshot");
+    }
+
+    let result: serde_json::Value = dev
+        .db
+        .query_one("select app.purge()", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(result["staff"], 1);
+
+    for (i, (name, _, _)) in cases.iter().enumerate() {
+        let exists = dev
+            .i64(&format!(
+                "select count(*) from app.staff where id = '{}'",
+                ids[i]
+            ))
+            .await
+            == 1;
+        assert_eq!(exists, *name != "Παλιός", "{name} after purge");
+        // Invariant: the purge never deletes anyone the snapshot still shows.
+        if in_snapshot(&before, ids[i]) {
+            assert!(exists, "{name} was in the snapshot but got purged");
+        }
+    }
+    // Their blocks went with them; everyone else's stayed.
+    assert_eq!(dev.i64("select count(*) from app.schedule_blocks").await, 4);
 }
 
 /// The real sync engine against dev: snapshot cached, plan uploaded, an
