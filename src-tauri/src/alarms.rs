@@ -124,6 +124,13 @@ impl Alarms {
             *rang = Some((alarm.id, cycle));
             #[cfg(windows)]
             crate::power::wake_display();
+            // The Today list comes up behind the alarm (also when the app
+            // started hidden in the tray), so marking is one tap after Stop.
+            #[cfg(desktop)]
+            if let Some(main) = app.get_webview_window(crate::tray::MAIN) {
+                let _ = main.show();
+                let _ = main.unminimize();
+            }
             if let Some(window) = window {
                 let _ = window.show();
                 let _ = window.unminimize();
