@@ -24,6 +24,16 @@ tauri-plugin-clockin-alarm.workspace = true
 tauri.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+jiff.workspace = true
+uuid = { version = "1.27.0", features = ["serde", "v4"] }
+tokio = { version = "1", features = ["sync", "time", "macros"] }
+getrandom = "0.3.4"
+thiserror = "2.0.21"
+
+# Windows Credential Manager for the device secret and the local database key.
+[target.'cfg(windows)'.dependencies]
+keyring-core = "1.0.0"
+windows-native-keyring-store = { version = "1.1.0", default-features = false }
 
 [lints]
 workspace = true
