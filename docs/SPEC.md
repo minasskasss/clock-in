@@ -163,6 +163,7 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
 
 - One notification per alarm event, listing the names under "Check in" and/or "Check out".
 - It uses the standard notification sound, with no looping and no repeats.
+- It follows the phone's Do Not Disturb: while DND is on, the notification still appears but makes no sound, so the phone can stay quiet at night. (Ring mode is an alarm and rings through DND.)
 - Tapping it opens the app.
 
 ### 7.5 Reliability requirements
