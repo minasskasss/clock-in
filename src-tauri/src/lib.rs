@@ -2,10 +2,18 @@
 //! calls. The sync client and local store live in `clockin-sync`, all time
 //! logic in `clockin-core`. On Windows the app also runs the alarm scheduler,
 //! the alarm window and sound, the tray, keep-awake and start-with-Windows
-//! (ARCHITECTURE §9).
+//! (ARCHITECTURE §9). On Android it feeds the Kotlin alarm plugin
+//! (ARCHITECTURE §10).
 
+#[cfg(desktop)]
 mod alarms;
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(any(target_os = "android", test))]
+mod android_plan;
+#[cfg(desktop)]
 mod audio;
+#[cfg(desktop)]
 mod autostart;
 mod clock;
 mod commands;
@@ -14,6 +22,7 @@ mod drafts;
 #[cfg(test)]
 mod e2e;
 mod error;
+#[cfg(any(desktop, test))]
 mod i18n;
 mod passgen;
 #[cfg(windows)]
@@ -29,13 +38,36 @@ mod volume;
 #[cfg(windows)]
 mod window_icon;
 
+#[cfg(desktop)]
 use crate::alarms::Alarms;
+#[cfg(desktop)]
 use crate::profile::Profile;
+#[cfg(desktop)]
 use crate::secrets::PlatformSecrets;
+#[cfg(desktop)]
 use crate::state::AppState;
+#[cfg(desktop)]
 use std::sync::Arc;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
+/// Android: the window now, the app core on its own thread (its secrets come
+/// through the Kotlin plugin, which answers on this, the main thread).
+#[cfg(target_os = "android")]
+fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let data_dir = app.path().app_local_data_dir()?;
+    WebviewWindowBuilder::new(app, "main", WebviewUrl::default()).build()?;
+    let handle = app.handle().clone();
+    std::thread::Builder::new()
+        .name("clock-in-start".into())
+        .spawn(move || {
+            if let Err(e) = android::start_app(&handle, &data_dir) {
+                eprintln!("clock-in: could not start: {e}");
+            }
+        })?;
+    Ok(())
+}
+
+#[cfg(desktop)]
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let profile = Profile::from_args();
     let data_dir = profile.data_dir(&app.path().app_local_data_dir()?);
@@ -81,21 +113,16 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let alarms = Arc::new(Alarms::new(&state, webview_dir));
     app.manage(Arc::clone(&alarms));
 
-    #[cfg(desktop)]
-    {
-        tray::create(app, window.scale_factor()?)?;
-        // Only the installed app registers itself, never a debug build or
-        // a second debug profile.
-        let manage_autostart = !cfg!(debug_assertions) && profile.name().is_none();
-        alarms::start(
-            app.handle().clone(),
-            Arc::clone(&state),
-            alarms,
-            manage_autostart,
-        );
-    }
-    #[cfg(not(desktop))]
-    let _ = (window, alarms);
+    tray::create(app, window.scale_factor()?)?;
+    // Only the installed app registers itself, never a debug build or a
+    // second debug profile.
+    let manage_autostart = !cfg!(debug_assertions) && profile.name().is_none();
+    alarms::start(
+        app.handle().clone(),
+        Arc::clone(&state),
+        alarms,
+        manage_autostart,
+    );
 
     #[cfg(windows)]
     {
@@ -120,6 +147,35 @@ fn start_sound_check(state: Arc<AppState>) {
         });
 }
 
+/// Desktop: single instance, and closing hides to the tray.
+#[cfg(desktop)]
+fn desktop_builder(mut builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    // One instance only (SPEC §8.1): starting it again shows the window. A
+    // debug `--profile` instance may run beside the default one.
+    if Profile::from_args().name().is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tray::show_main(app);
+        }));
+    }
+    builder.on_window_event(|window, event| match event {
+        tauri::WindowEvent::CloseRequested { api, .. } => {
+            // Closing hides the main window to the tray; the alarm window
+            // closes only through Stop. Quitting needs the quit code.
+            api.prevent_close();
+            if window.label() == tray::MAIN {
+                let _ = window.hide();
+            }
+        }
+        #[cfg(windows)]
+        tauri::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+            if let Ok(hwnd) = window.hwnd() {
+                window_icon::apply(hwnd.0, *scale_factor);
+            }
+        }
+        _ => {}
+    })
+}
+
 /// Builds and runs the Tauri application.
 ///
 /// # Panics
@@ -127,36 +183,12 @@ fn start_sound_check(state: Arc<AppState>) {
 /// Panics if the Tauri runtime cannot start (e.g. no webview available).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default();
-    // One instance only (SPEC §8.1): starting it again shows the window. A
-    // debug `--profile` instance may run beside the default one.
+    let builder = tauri::Builder::default();
     #[cfg(desktop)]
-    if Profile::from_args().name().is_none() {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            tray::show_main(app);
-        }));
-    }
+    let builder = desktop_builder(builder);
     builder
         .plugin(tauri_plugin_clockin_alarm::init())
         .setup(setup)
-        .on_window_event(|window, event| match event {
-            #[cfg(desktop)]
-            tauri::WindowEvent::CloseRequested { api, .. } => {
-                // Closing hides the main window to the tray; the alarm window
-                // closes only through Stop. Quitting needs the quit code.
-                api.prevent_close();
-                if window.label() == tray::MAIN {
-                    let _ = window.hide();
-                }
-            }
-            #[cfg(windows)]
-            tauri::WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                if let Ok(hwnd) = window.hwnd() {
-                    window_icon::apply(hwnd.0, *scale_factor);
-                }
-            }
-            _ => {}
-        })
         .invoke_handler(tauri::generate_handler![
             commands::app_state,
             commands::check_new_passphrase,
@@ -179,9 +211,15 @@ pub fn run() {
             commands::device_revoke,
             commands::change_passphrase,
             commands::generate_passphrase,
+            #[cfg(desktop)]
             commands::alarm_state,
+            #[cfg(desktop)]
             commands::alarm_stop,
+            #[cfg(desktop)]
             commands::quit,
+            commands::set_alert_mode,
+            commands::android_open_settings,
+            commands::android_set_oem_done,
             commands::debug_set_clock,
         ])
         .run(tauri::generate_context!())

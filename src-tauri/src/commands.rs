@@ -1,6 +1,7 @@
 //! The commands the UI calls (`invoke`). They stay thin: rules live in
 //! `clockin-core`, the server calls in `clockin-sync`, state in [`AppState`].
 
+#[cfg(desktop)]
 use crate::alarms::{AlarmView, Alarms};
 use crate::drafts::{
     self, OverrideReport, RangeDraft, WeekBlockDraft, WeekReport, check_override, check_week,
@@ -8,7 +9,7 @@ use crate::drafts::{
 };
 use crate::error::CmdError;
 use crate::passgen;
-use crate::state::{AppState, Phase};
+use crate::state::{AlertMode, AppState, Phase};
 use crate::views::{AdminView, Banners, TodayView};
 use clockin_core::{
     MarkKind, NameError, OverrideKind, ScheduleSettings, is_valid_quit_code, normalize_name,
@@ -42,6 +43,21 @@ pub struct AppStateView {
     auto_dark: bool,
     /// Whether Quit asks for a quit code (false before one is known).
     quit_code_set: bool,
+    /// `windows` or `android`.
+    platform: &'static str,
+    /// Android only.
+    android: Option<AndroidView>,
+}
+
+/// Android: this phone's alert mode and permission checklist (SPEC §8.2).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AndroidView {
+    alert_mode: AlertMode,
+    /// `None` until the checklist was first read.
+    permissions: Option<tauri_plugin_clockin_alarm::PermissionStatus>,
+    /// Everything the alarms need is granted (the Today banner, SPEC §6).
+    permissions_ok: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,7 +71,8 @@ pub struct DebugView {
 }
 
 #[tauri::command]
-pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
+#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::needless_pass_by_value))]
+pub fn app_state(app: tauri::AppHandle, state: AppS<'_>) -> Result<AppStateView, CmdError> {
     let phase = state.phase();
     let paired = phase == Phase::Paired;
     Ok(AppStateView {
@@ -67,7 +84,7 @@ pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
             fake_clock_second: state.clock.fake_second_pass(),
         }),
         lockout_remaining_s: state.lockout_remaining_s(),
-        default_device_name: state.profile().default_device_name(),
+        default_device_name: state.default_device_name(),
         today: if paired { state.today()? } else { None },
         banners: if paired {
             state.banners()
@@ -78,7 +95,77 @@ pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
         data_version: state.data_version(),
         auto_dark: clockin_core::auto_theme_is_dark(state.clock.now(), state.rollover()),
         quit_code_set: state.quit_code_set(),
+        platform: if cfg!(target_os = "android") {
+            "android"
+        } else {
+            "windows"
+        },
+        android: android_view(&app, &state),
     })
+}
+
+#[cfg(target_os = "android")]
+fn android_view(app: &tauri::AppHandle, state: &AppState) -> Option<AndroidView> {
+    use tauri::Manager;
+    let permissions = app
+        .try_state::<Arc<crate::android::Android>>()
+        .and_then(|a| a.status());
+    Some(AndroidView {
+        alert_mode: state.alert_mode(),
+        permissions_ok: permissions
+            .as_ref()
+            .is_none_or(tauri_plugin_clockin_alarm::PermissionStatus::all_granted),
+        permissions,
+    })
+}
+
+#[cfg(not(target_os = "android"))]
+fn android_view(_app: &tauri::AppHandle, _state: &AppState) -> Option<AndroidView> {
+    None
+}
+
+// --- Android: alert mode and the permission checklist -------------------------------
+
+/// Ring or Notification, per device, no passphrase (SPEC §8.2).
+#[tauri::command]
+#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::needless_pass_by_value))]
+pub fn set_alert_mode(
+    app: tauri::AppHandle,
+    state: AppS<'_>,
+    mode: AlertMode,
+) -> Result<(), CmdError> {
+    state.set_alert_mode(mode)?;
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        if let Some(android) = app.try_state::<Arc<crate::android::Android>>() {
+            android.wake.notify_one();
+        }
+    }
+    Ok(())
+}
+
+/// Opens the Android screen that fixes one checklist item (`notifications`,
+/// `exactAlarms`, `fullScreen`, `battery`, `unusedApps`, `oem`).
+#[tauri::command]
+#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::unused_async))]
+pub async fn android_open_settings(app: tauri::AppHandle, kind: String) -> Result<(), CmdError> {
+    #[cfg(target_os = "android")]
+    if let Some(Err(e)) = crate::android::bridge(&app, move |b| b.open_settings(&kind)).await {
+        return Err(CmdError::internal(e));
+    }
+    Ok(())
+}
+
+/// The phone maker's extra step was done (it can't be checked automatically).
+#[tauri::command]
+#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::unused_async))]
+pub async fn android_set_oem_done(app: tauri::AppHandle, done: bool) -> Result<(), CmdError> {
+    #[cfg(target_os = "android")]
+    if let Some(Err(e)) = crate::android::bridge(&app, move |b| b.set_oem_done(done)).await {
+        return Err(CmdError::internal(e));
+    }
+    Ok(())
 }
 
 // --- First run --------------------------------------------------------------
@@ -395,6 +482,7 @@ pub fn generate_passphrase(state: AppS<'_>) -> Result<String, CmdError> {
 // --- Alarms and quitting (Windows) ------------------------------------------------
 
 /// What the alarm window polls.
+#[cfg(desktop)]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlarmStateView {
@@ -403,6 +491,7 @@ pub struct AlarmStateView {
     auto_dark: bool,
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn alarm_state(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>) -> AlarmStateView {
     AlarmStateView {
@@ -413,6 +502,7 @@ pub fn alarm_state(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>) -> AlarmStat
 
 /// Stop on the alarm window: ends alarm `id` on this device only. It marks
 /// nobody (SPEC §7.3).
+#[cfg(desktop)]
 #[tauri::command]
 pub fn alarm_stop(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>, id: u64) {
     alarms.stop(&state, id);
@@ -421,6 +511,7 @@ pub fn alarm_stop(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>, id: u64) {
 /// Tray → Quit (SPEC §8.1): exits only with the right quit code, checked on
 /// this device (works offline). No lockout: the code only prevents closing
 /// by accident.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn quit(app: tauri::AppHandle, state: AppS<'_>, code: String) -> Result<(), CmdError> {
     if state.quit_allowed(&code) {
