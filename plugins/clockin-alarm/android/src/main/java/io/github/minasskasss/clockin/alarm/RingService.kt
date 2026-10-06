@@ -144,11 +144,15 @@ class RingService : Service() {
         } else {
             enterForeground(Notifications.ID_CHECKING, Notifications.checking(this))
         }
+        val at = intent?.getLongExtra(EXTRA_AT, 0) ?: 0
         if (!inForeground) {
+            // Android refused the foreground service: never lose the alarm,
+            // alert with a plain notification instead.
+            val items = Store.get(this).plan().items.filter { it.firesAtMs == at }
+            if (intent?.action == ACTION_FIRE && items.isNotEmpty()) Notifications.showReminder(this, items, at / 60_000L)
             stopSelf()
             return START_NOT_STICKY
         }
-        val at = intent?.getLongExtra(EXTRA_AT, 0) ?: 0
         when (intent?.action) {
             ACTION_FIRE -> worker.execute { fire(at) }
             ACTION_RERING -> worker.execute { rering() }
