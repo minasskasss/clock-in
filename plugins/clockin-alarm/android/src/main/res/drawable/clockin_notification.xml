@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Status-bar icon (one colour, drawn by Android in white): the pizza clock's
+  crust ring and tick from assets/icon, simplified for 24 dp.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,2.75a9.25,9.25 0,1 1,0 18.5a9.25,9.25 0,1 1,0 -18.5z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2" />
+    <path
+        android:pathData="M8.2,11.6L11.9,13.5L16.4,8.2"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15.6,15.2a1.3,1.3 0,1 1,0 2.6a1.3,1.3 0,1 1,0 -2.6z M9.4,16.2a1.3,1.3 0,1 1,0 2.6a1.3,1.3 0,1 1,0 -2.6z" />
+</vector>

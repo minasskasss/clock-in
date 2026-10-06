@@ -1,6 +1,9 @@
-// Commands are added in Phase 5, together with the Kotlin side in `android/`.
+// The Kotlin commands are called from Rust only (`src/mobile.rs`), never from
+// the webview, so no command is exposed through permissions.
 const COMMANDS: &[&str] = &[];
 
 fn main() {
-    tauri_plugin::Builder::new(COMMANDS).build();
+    tauri_plugin::Builder::new(COMMANDS)
+        .android_path("android")
+        .build();
 }
