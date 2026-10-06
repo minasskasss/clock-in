@@ -8,10 +8,14 @@
 
 use clockin_core::Sound;
 
+// Decoded only by the Windows player (and the tests).
+#[cfg(any(windows, test))]
 const CHECK_IN_WAV: &[u8] = include_bytes!("../../assets/sounds/check-in.wav");
+#[cfg(any(windows, test))]
 const CHECK_OUT_WAV: &[u8] = include_bytes!("../../assets/sounds/check-out.wav");
 
 /// Decoded PCM audio.
+#[cfg(any(windows, test))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Pcm {
     pub channels: u16,
@@ -21,6 +25,7 @@ pub struct Pcm {
 }
 
 /// Reads a 16-bit PCM WAV (the format `tools/gen-sounds` writes).
+#[cfg(any(windows, test))]
 #[must_use]
 pub fn parse_wav(bytes: &[u8]) -> Option<Pcm> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
@@ -68,6 +73,7 @@ pub fn parse_wav(bytes: &[u8]) -> Option<Pcm> {
 }
 
 /// The decoded sound for an alarm event.
+#[cfg(any(windows, test))]
 #[must_use]
 pub fn pcm(sound: Sound) -> Option<Pcm> {
     parse_wav(match sound {

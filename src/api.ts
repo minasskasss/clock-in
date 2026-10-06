@@ -51,7 +51,7 @@ export interface Banners {
 export interface AppStateView {
   phase: Phase;
   environment: "dev" | "prod";
-  debug: { profile: string | null; fakeClock: string | null } | null;
+  debug: { profile: string | null; fakeClock: string | null; fakeClockSecond: boolean } | null;
   lockoutRemainingS: number;
   defaultDeviceName: string;
   today: TodayView | null;
@@ -263,5 +263,5 @@ export const api = {
   alarmStop: (id: number) => call<void>("alarm_stop", { id }),
   /** Exits the app if `code` is the quit code; otherwise rejects. */
   quit: (code: string) => call<void>("quit", { code }),
-  debugSetClock: (local: string | null) => call<void>("debug_set_clock", { local }),
+  debugSetClock: (local: string | null, second = false) => call<void>("debug_set_clock", { local, second }),
 };

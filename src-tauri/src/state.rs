@@ -319,8 +319,8 @@ impl AppState {
     }
 
     /// Debug builds: moves the clock and re-syncs. Returns false if refused.
-    pub fn set_fake_clock(&self, target: Option<jiff::civil::DateTime>) -> bool {
-        let done = self.clock.set_fake(target);
+    pub fn set_fake_clock(&self, target: Option<jiff::civil::DateTime>, second: bool) -> bool {
+        let done = self.clock.set_fake(target, second);
         if done {
             self.sync_soon();
             self.alarm_wake.notify_one();
@@ -377,6 +377,7 @@ impl AppState {
     }
 
     /// Records whether Windows sound output is muted, at zero or missing.
+    #[cfg(windows)]
     pub fn set_sound_off(&self, off: bool) {
         self.sound_off.store(off, Ordering::Relaxed);
     }

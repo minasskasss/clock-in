@@ -50,6 +50,8 @@ pub struct DebugView {
     profile: Option<String>,
     /// Greek wall clock "YYYY-MM-DDTHH:MM" while the fake clock is on.
     fake_clock: Option<String>,
+    /// The fake time is in the second pass of the repeated hour.
+    fake_clock_second: bool,
 }
 
 #[tauri::command]
@@ -62,6 +64,7 @@ pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
         debug: cfg!(debug_assertions).then(|| DebugView {
             profile: state.profile().name().map(str::to_owned),
             fake_clock: state.clock.fake(),
+            fake_clock_second: state.clock.fake_second_pass(),
         }),
         lockout_remaining_s: state.lockout_remaining_s(),
         default_device_name: state.profile().default_device_name(),
@@ -425,9 +428,14 @@ pub fn quit(app: tauri::AppHandle, state: AppS<'_>, code: String) -> Result<(), 
 // --- Debug ----------------------------------------------------------------------
 
 /// Debug builds: sets the fake clock to a Greek wall-clock time
-/// ("YYYY-MM-DDTHH:MM"), or back to real time with `null`.
+/// ("YYYY-MM-DDTHH:MM"), or back to real time with `null`. `second`: the
+/// second pass of the hour that repeats when the clocks go back.
 #[tauri::command]
-pub fn debug_set_clock(state: AppS<'_>, local: Option<String>) -> Result<(), CmdError> {
+pub fn debug_set_clock(
+    state: AppS<'_>,
+    local: Option<String>,
+    second: Option<bool>,
+) -> Result<(), CmdError> {
     let target = match local {
         None => None,
         // ISO "2026-10-05T21:00"; the UI reads the typed dd/mm/yyyy HH:MM.
@@ -436,7 +444,7 @@ pub fn debug_set_clock(state: AppS<'_>, local: Option<String>) -> Result<(), Cmd
                 .map_err(|_| CmdError::invalid("fake_clock", "format"))?,
         ),
     };
-    if state.set_fake_clock(target) {
+    if state.set_fake_clock(target, second.unwrap_or(false)) {
         Ok(())
     } else {
         Err(CmdError::invalid("fake_clock", "unavailable"))

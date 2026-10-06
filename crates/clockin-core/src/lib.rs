@@ -36,8 +36,8 @@ mod proptests;
 mod test_support;
 
 pub use admin::{
-    ADMIN_IDLE_TIMEOUT, admin_idle_expired, clock_offset_to, lockout_until, offset_now,
-    seconds_until,
+    ADMIN_IDLE_TIMEOUT, admin_idle_expired, clock_offset_to, in_second_pass, lockout_until,
+    offset_now, seconds_until,
 };
 pub use business_day::{BlockLayout, business_date_for, business_day_start};
 pub use events::{

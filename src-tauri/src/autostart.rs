@@ -19,6 +19,7 @@ pub fn started_at_login() -> bool {
 }
 
 /// The `Run` value for the program at `exe`: the quoted path plus the flag.
+#[cfg(any(windows, test))]
 #[must_use]
 pub fn command_line(exe: &std::path::Path) -> String {
     format!("\"{}\" {FLAG}", exe.display())

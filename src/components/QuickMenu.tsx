@@ -83,9 +83,10 @@ export function QuickMenu({ theme, onThemeChange, debug, onDebugChange }: QuickM
 function DebugSection({ debug, onChange }: { debug: NonNullable<AppStateView["debug"]>; onChange?: () => void }) {
   const { t } = useTranslation();
   const [value, setValue] = useState(debug.fakeClock ? formatDateTime(debug.fakeClock) : "");
+  const [second, setSecond] = useState(debug.fakeClockSecond);
   const [bad, setBad] = useState(false);
   const set = (local: string | null) =>
-    void api.debugSetClock(local).then(
+    void api.debugSetClock(local, local !== null && second).then(
       () => {
         setBad(false);
         onChange?.();
@@ -108,6 +109,10 @@ function DebugSection({ debug, onChange }: { debug: NonNullable<AppStateView["de
         onChange={(e) => setValue(e.target.value)}
       />
       {bad && <p className="field__error">{t("menu.fakeClockFormat")}</p>}
+      <label className="checkbox quick-menu__note">
+        <input type="checkbox" checked={second} onChange={(e) => setSecond(e.target.checked)} />
+        {t("menu.fakeClockSecond")}
+      </label>
       <div className="segmented">
         <button
           type="button"
@@ -125,7 +130,13 @@ function DebugSection({ debug, onChange }: { debug: NonNullable<AppStateView["de
           {t("menu.realClock")}
         </button>
       </div>
-      {debug.fakeClock && <p className="quick-menu__note">{t("menu.fakeClockOn", { time: formatDateTime(debug.fakeClock) })}</p>}
+      {debug.fakeClock && (
+        <p className="quick-menu__note">
+          {t(debug.fakeClockSecond ? "menu.fakeClockOnSecond" : "menu.fakeClockOn", {
+            time: formatDateTime(debug.fakeClock),
+          })}
+        </p>
+      )}
     </fieldset>
   );
 }
