@@ -1,9 +1,10 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { setSystemPrefersDark } from "./test/setup";
 import { appState, callsTo, mockCommands } from "./test/tauri";
+import { FAILURES_BEFORE_MESSAGE, POLL_MS } from "./useAppState";
 
 describe("App", () => {
   it("shows the Greek first-run choices on an unpaired device, with the background", async () => {
@@ -139,13 +140,22 @@ describe("App", () => {
     expect(callsTo(calls, "debug_set_clock")[1]).toEqual({ local: "2026-10-25T03:20", second: false });
   });
 
-  it("tells the user when the app core doesn't answer", async () => {
-    mockCommands({
-      app_state: () => {
-        throw new Error("no IPC");
-      },
-    });
-    render(<App />);
-    expect(await screen.findByText(/Η εφαρμογή δεν αποκρίνεται/)).toBeInTheDocument();
+  it("tells the user when the app core doesn't answer, after a short grace", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockCommands({
+        app_state: () => {
+          throw new Error("no IPC");
+        },
+      });
+      render(<App />);
+      // Android starts its core on a thread: the first answers may fail.
+      await vi.advanceTimersByTimeAsync(POLL_MS * 2);
+      expect(screen.getByText("Φόρτωση…")).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(POLL_MS * FAILURES_BEFORE_MESSAGE);
+      expect(screen.getByText(/Η εφαρμογή δεν αποκρίνεται/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
