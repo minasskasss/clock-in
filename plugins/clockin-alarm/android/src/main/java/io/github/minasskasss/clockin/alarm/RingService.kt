@@ -127,6 +127,7 @@ class RingService : Service() {
     /** Main thread only. */
     private var ringing = false
     private val silence = Runnable { goSilent() }
+    private val recheckTick = Runnable { worker.execute { recheck() } }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -246,12 +247,68 @@ class RingService : Service() {
         acquireWakeLock()
         main.removeCallbacks(silence)
         main.postDelayed(silence, AlarmScheduler.RING_MS)
+        main.removeCallbacks(recheckTick)
+        main.postDelayed(recheckTick, AlarmScheduler.RECHECK_MS)
         Ring.changed()
+    }
+
+    /**
+     * While ringing (worker thread): asks the server again, drops names
+     * marked, moved or removed elsewhere, and ends when nobody is left. A
+     * failed check (offline, slow, or no secret before the first unlock)
+     * keeps every name ringing (fail loud).
+     */
+    private fun recheck() {
+        val store = Store.get(this)
+        val asked = store.active()?.items ?: return
+        val dueKeys = Checker.stillDue(this, asked).map { it.key }.toSet()
+        val askedKeys = asked.map { it.key }.toSet()
+        val ended: Boolean
+        val changed: Boolean
+        synchronized(Store.LOCK) {
+            // The cycle may have changed during the check (Stop, new names joining).
+            val active = store.active()
+            if (active == null) {
+                ended = false
+                changed = false
+            } else {
+                val dropped = active.items.filter { it.key in askedKeys && it.key !in dueKeys }
+                val remaining = active.items - dropped.toSet()
+                changed = dropped.isNotEmpty()
+                ended = remaining.isEmpty()
+                if (ended) {
+                    store.markHandled(active.items, System.currentTimeMillis())
+                    store.setActive(null)
+                } else if (changed) {
+                    store.markHandled(dropped, System.currentTimeMillis())
+                    store.setActive(active.copy(items = remaining))
+                }
+            }
+        }
+        if (ended) {
+            Notifications.cancel(this, Notifications.ID_SILENT)
+            Notifications.cancel(this, Notifications.ID_RINGING)
+            AlarmScheduler.reschedule(this)
+            end()
+            Ring.changed()
+            return
+        }
+        if (changed) {
+            refreshNotification()
+            Ring.changed()
+        }
+        main.post {
+            if (ringing) {
+                main.removeCallbacks(recheckTick)
+                main.postDelayed(recheckTick, AlarmScheduler.RECHECK_MS)
+            }
+        }
     }
 
     private fun goSilent() {
         stopSound()
         ringing = false
+        main.removeCallbacks(recheckTick)
         val reringAt = System.currentTimeMillis() + AlarmScheduler.SILENT_MS
         val active = synchronized(Store.LOCK) {
             val store = Store.get(this)
@@ -279,6 +336,7 @@ class RingService : Service() {
             stopSound()
             ringing = false
             main.removeCallbacks(silence)
+            main.removeCallbacks(recheckTick)
             finish()
         }
     }
@@ -353,6 +411,7 @@ class RingService : Service() {
 
     override fun onDestroy() {
         main.removeCallbacks(silence)
+        main.removeCallbacks(recheckTick)
         stopSound()
         releaseWakeLock()
         worker.shutdown()

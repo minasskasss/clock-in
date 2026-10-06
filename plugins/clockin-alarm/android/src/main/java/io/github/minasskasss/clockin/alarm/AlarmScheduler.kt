@@ -19,6 +19,8 @@ internal object AlarmScheduler {
     /** Ring 5 minutes, then silent 5 minutes (SPEC §7.3). */
     const val RING_MS = 5L * 60 * 1000
     const val SILENT_MS = 5L * 60 * 1000
+    /** While ringing, ask the server again this often (marks made elsewhere). */
+    const val RECHECK_MS = 25L * 1000
 
     /** The request code of the re-ring alarm (alarm codes are epoch minutes, far above). */
     private const val RERING_CODE = 1
