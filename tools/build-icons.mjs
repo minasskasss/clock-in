@@ -3,6 +3,7 @@
 // 1. `tauri icon assets/icon/icons.json` writes all sizes to src-tauri/icons:
 //    PNGs, icon.icns, and the Android set (adaptive foreground/background/
 //    monochrome, legacy and round icons). It scales one source per output.
+//    The Android set is also copied into the Android project (src-tauri/gen).
 // 2. src-tauri/icons/icon.ico is then rebuilt with hand-tuned layers: the shop
 //    PC runs at 100 % scaling, where Windows draws the title bar and tray at
 //    16 px, the taskbar at 24 px and Start pins at 32 px, and a shrunk 512 px
@@ -12,7 +13,7 @@
 // Each layer is stored as PNG, as `tauri icon` does; Windows Vista and later
 // read PNG layers. No dependencies beyond the Tauri CLI.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -89,3 +90,10 @@ rmSync(TMP, { recursive: true, force: true });
 console.log(
   `icon.ico: ${ORDER.map((s) => `${s}${TUNED.includes(s) ? " (tuned)" : ""}`).join(", ")}`,
 );
+
+// The Android project uses the same icons (adaptive, themed, legacy, round).
+const ANDROID_RES = join(ICONS, "..", "gen", "android", "app", "src", "main", "res");
+if (existsSync(ANDROID_RES)) {
+  cpSync(join(ICONS, "android"), ANDROID_RES, { recursive: true });
+  console.log("Android: copied into src-tauri/gen/android/app/src/main/res");
+}

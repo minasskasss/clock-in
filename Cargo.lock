@@ -522,7 +522,7 @@ dependencies = [
 
 [[package]]
 name = "clock-in"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clockin-core",
  "clockin-sync",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "clockin-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "jiff",
  "proptest",
@@ -559,7 +559,7 @@ dependencies = [
 
 [[package]]
 name = "clockin-sync"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clockin-core",
  "getrandom 0.3.4",
@@ -1477,7 +1477,7 @@ dependencies = [
 
 [[package]]
 name = "gen-sounds"
-version = "0.4.0"
+version = "0.5.0"
 
 [[package]]
 name = "generic-array"
@@ -4369,10 +4369,13 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-clockin-alarm"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-plugin",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

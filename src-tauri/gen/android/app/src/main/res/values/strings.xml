@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">"Clock In"</string>
+    <string name="main_activity_title">"Clock In"</string>
+</resources>
