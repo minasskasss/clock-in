@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { callsTo, mockCommands, row, today } from "../test/tauri";
 import { Today } from "./Today";
 
-const noBanners = { offline: false, lastSync: null, clockSkew: false, horizonShort: false, soundOff: false };
+const noBanners = { offline: false, lastSync: null, clockSkew: false, horizonShort: false, soundOff: false, refusedMarks: [] };
 
 describe("Today view", () => {
   it("shows the header, every row with its hours and status, and (+1) after midnight", () => {
@@ -88,6 +88,7 @@ describe("Today view", () => {
           clockSkew: true,
           horizonShort: true,
           soundOff: true,
+          refusedMarks: [],
         }}
         onChanged={() => {}}
       />,
@@ -97,5 +98,36 @@ describe("Today view", () => {
     expect(screen.getByText(/λιγότερες από 3 μέρες/)).toBeInTheDocument();
     expect(screen.getByText(/Ο ήχος των Windows είναι κλειστός/)).toBeInTheDocument();
     expect(screen.getAllByRole("status")).toHaveLength(4);
+  });
+
+  it("says by name when a mark was refused, until «Εντάξει»", async () => {
+    const calls = mockCommands({ dismiss_refused_mark: null });
+    const onChanged = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Today
+        today={today()}
+        banners={{
+          ...noBanners,
+          refusedMarks: [
+            { id: "m1", firstName: "Μαρία", lastName: "Παππά", kind: "in", otherDate: null },
+            { id: "m2", firstName: "Νίκος", lastName: "Αλεξίου", kind: "out", otherDate: "2026-10-24" },
+            { id: "m3", firstName: "", lastName: "", kind: "in", otherDate: null },
+          ],
+        }}
+        onChanged={onChanged}
+      />,
+    );
+    const alerts = screen.getAllByRole("alert");
+    expect(alerts).toHaveLength(3);
+    expect(alerts[0]).toHaveTextContent(
+      "Η σήμανση «Ήρθε» για Μαρία Παππά ΔΕΝ αποθηκεύτηκε. Δοκιμάστε ξανά ή ενημερώστε τον εργοδότη.",
+    );
+    expect(alerts[1]).toHaveTextContent("Η σήμανση «Έφυγε» για Νίκος Αλεξίου (24/10/2026) ΔΕΝ αποθηκεύτηκε.");
+    expect(alerts[2]).toHaveTextContent("Η σήμανση «Ήρθε» για άγνωστο άτομο ΔΕΝ αποθηκεύτηκε.");
+
+    await user.click(within(alerts[1]!).getByRole("button", { name: "Εντάξει" }));
+    expect(callsTo(calls, "dismiss_refused_mark")).toEqual([{ id: "m2" }]);
+    expect(onChanged).toHaveBeenCalled();
   });
 });

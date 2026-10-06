@@ -1,19 +1,37 @@
 //! The local SQLCipher database (ARCHITECTURE §5.8): the snapshot cache, the
-//! pending-marks queue and per-device settings.
+//! pending-marks queue, marks the server refused and per-device settings.
 //!
 //! It is encrypted with a random 256-bit key that the platform layer keeps
 //! in the OS secret store, so copying the files is useless. The real
 //! protection of admin actions is the server-side check.
 
 use crate::api::{MarkRequest, ServerSnapshot};
+use clockin_core::MarkKind;
 use jiff::Timestamp;
+use jiff::civil::Date;
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::Path;
 use uuid::Uuid;
 
 /// Bumped when the local schema changes; see [`migrate`].
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
+
+/// A queued mark the server refused for good (e.g. its date is outside
+/// what the server accepts). Kept until someone on this device has seen the
+/// notice, so a refused mark never disappears silently.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefusedMark {
+    pub client_id: Uuid,
+    pub staff_id: Uuid,
+    pub business_date: Date,
+    pub kind: MarkKind,
+    /// The name when it was refused (empty if this device didn't know it).
+    pub first_name: String,
+    pub last_name: String,
+    pub refused_at: Timestamp,
+}
 
 const KEY_SNAPSHOT: &str = "snapshot";
 const KEY_LAST_SYNC: &str = "last_sync";
@@ -238,6 +256,62 @@ impl Store {
         Ok(())
     }
 
+    // --- Refused marks --------------------------------------------------
+
+    /// Moves a queued mark the server refused out of the queue and into the
+    /// refused list, in one transaction.
+    ///
+    /// # Errors
+    ///
+    /// On a database error.
+    pub fn refuse_pending_mark(&self, refused: &RefusedMark) -> Result<(), StoreError> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
+            "INSERT OR IGNORE INTO refused_marks (client_id, payload) VALUES (?1, ?2)",
+            params![
+                refused.client_id.to_string(),
+                serde_json::to_string(refused)?
+            ],
+        )?;
+        tx.execute(
+            "DELETE FROM pending_marks WHERE client_id = ?1",
+            [refused.client_id.to_string()],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Refused marks nobody has dismissed yet, oldest first.
+    ///
+    /// # Errors
+    ///
+    /// On a database or decoding error.
+    pub fn refused_marks(&self) -> Result<Vec<RefusedMark>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT payload FROM refused_marks ORDER BY seq")?;
+        let payloads = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        payloads
+            .iter()
+            .map(|p| serde_json::from_str(p).map_err(StoreError::from))
+            .collect()
+    }
+
+    /// The notice for this refused mark was read («Εντάξει»).
+    ///
+    /// # Errors
+    ///
+    /// On a database error.
+    pub fn dismiss_refused_mark(&self, client_id: Uuid) -> Result<(), StoreError> {
+        self.conn.execute(
+            "DELETE FROM refused_marks WHERE client_id = ?1",
+            [client_id.to_string()],
+        )?;
+        Ok(())
+    }
+
     // --- Per-device settings (alert mode, language, theme, ...) ---------
 
     /// # Errors
@@ -259,8 +333,8 @@ impl Store {
         self.put(&format!("device.{name}"), value, now)
     }
 
-    /// Forgets everything that belongs to the server: snapshot, last sync
-    /// and queued marks (after unpairing). Device settings stay.
+    /// Forgets everything that belongs to the server: snapshot, last sync,
+    /// queued and refused marks (after unpairing). Device settings stay.
     ///
     /// # Errors
     ///
@@ -268,7 +342,8 @@ impl Store {
     pub fn clear_server_data(&self) -> Result<(), StoreError> {
         self.conn.execute_batch(&format!(
             "DELETE FROM kv WHERE key IN ('{KEY_SNAPSHOT}', '{KEY_LAST_SYNC}');
-             DELETE FROM pending_marks;"
+             DELETE FROM pending_marks;
+             DELETE FROM refused_marks;"
         ))?;
         Ok(())
     }
@@ -316,6 +391,18 @@ fn migrate(conn: &Connection) -> Result<(), StoreError> {
                  queued_at  TEXT NOT NULL
              );
              PRAGMA user_version = 1;
+             COMMIT;",
+        )?;
+    }
+    if version < 2 {
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE refused_marks (
+                 seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+                 client_id  TEXT NOT NULL UNIQUE,
+                 payload    TEXT NOT NULL
+             );
+             PRAGMA user_version = 2;
              COMMIT;",
         )?;
     }
@@ -450,6 +537,69 @@ mod tests {
         store.remove_pending_mark(Uuid::from_u128(1)).unwrap();
         assert_eq!(store.pending_marks().unwrap().len(), 2);
         assert_eq!(store.pending_marks().unwrap()[0], mark(3));
+    }
+
+    fn refused(n: u128) -> RefusedMark {
+        RefusedMark {
+            client_id: Uuid::from_u128(n),
+            staff_id: Uuid::from_u128(100),
+            business_date: date(2026, 10, 24),
+            kind: MarkKind::In,
+            first_name: "Μαρία".into(),
+            last_name: "Παππά".into(),
+            refused_at: ts("2026-10-24T19:01:00Z"),
+        }
+    }
+
+    #[test]
+    fn a_refused_mark_leaves_the_queue_and_stays_until_dismissed() {
+        let store = Store::open_in_memory(&StoreKey::generate().unwrap()).unwrap();
+        let at = ts("2026-10-05T10:00:00Z");
+        store.queue_mark(&mark(1), at).unwrap();
+        store.queue_mark(&mark(2), at).unwrap();
+
+        store.refuse_pending_mark(&refused(1)).unwrap();
+        assert_eq!(store.pending_marks().unwrap(), [mark(2)]);
+        assert_eq!(store.refused_marks().unwrap(), [refused(1)]);
+        // Refusing it again keeps one notice.
+        store.refuse_pending_mark(&refused(1)).unwrap();
+        assert_eq!(store.refused_marks().unwrap().len(), 1);
+
+        store.dismiss_refused_mark(Uuid::from_u128(1)).unwrap();
+        assert!(store.refused_marks().unwrap().is_empty());
+
+        store.refuse_pending_mark(&refused(2)).unwrap();
+        store.clear_server_data().unwrap();
+        assert!(store.refused_marks().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_version_1_database_gains_the_refused_list() {
+        let dir = std::env::temp_dir().join(format!("clockin-store-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("local.db");
+        let key = StoreKey::generate().unwrap();
+        {
+            // What Phase 2–4 builds created.
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", key.expose_hex()))
+                .unwrap();
+            conn.execute_batch(
+                "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+                 CREATE TABLE pending_marks (seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                     client_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL, queued_at TEXT NOT NULL);
+                 PRAGMA user_version = 1;",
+            )
+            .unwrap();
+        }
+        let store = Store::open(&path, &key).unwrap();
+        store
+            .queue_mark(&mark(1), ts("2026-10-05T10:00:00Z"))
+            .unwrap();
+        store.refuse_pending_mark(&refused(1)).unwrap();
+        assert_eq!(store.refused_marks().unwrap().len(), 1);
+        drop(store);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -163,6 +163,7 @@ pub fn run() {
             commands::initialize,
             commands::pair,
             commands::mark,
+            commands::dismiss_refused_mark,
             commands::admin_login,
             commands::admin_logout,
             commands::admin_touch,

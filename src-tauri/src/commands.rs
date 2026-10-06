@@ -131,6 +131,12 @@ pub fn mark(
     state.mark(staff_id, source_block_id, date, kind)
 }
 
+/// «Εντάξει» on the notice for a mark the server refused.
+#[tauri::command]
+pub fn dismiss_refused_mark(state: AppS<'_>, id: Uuid) -> Result<(), CmdError> {
+    state.dismiss_refused_mark(id)
+}
+
 // --- Admin session --------------------------------------------------------------
 
 #[tauri::command]

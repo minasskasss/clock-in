@@ -15,7 +15,7 @@ use crate::api::{
     Api, ApiError, ErrorCode, MarkReceipt, MarkRequest, ServerMark, ServerSnapshot, Versions,
 };
 use crate::secret::DeviceSecret;
-use crate::store::{CachedSnapshot, Store, StoreError};
+use crate::store::{CachedSnapshot, RefusedMark, Store, StoreError};
 use clockin_core::{
     MarkKind, PlanItem, Snapshot, alarm_plan, clock_skew_exceeded, horizon_short,
     plan_needs_refresh, plan_window, sync_retry_delay,
@@ -320,17 +320,40 @@ impl<B: SyncBackend> SyncEngine<B> {
         let mut any = false;
         for mark in pending {
             match self.backend.mark(&self.secret, &mark).await {
-                Ok(receipt) => self.remember_confirmed(&mark, &receipt, now)?,
+                Ok(receipt) => {
+                    self.remember_confirmed(&mark, &receipt, now)?;
+                    self.store.remove_pending_mark(mark.client_id)?;
+                }
                 // The server will never accept it (e.g. a mark queued more
-                // than two business days ago): retrying can't help.
-                Err(e) if e.code() == Some(&ErrorCode::InvalidInput) => {}
+                // than two business days ago, or a wrong device date):
+                // retrying can't help, so it moves to the refused list and
+                // the Today view says so until someone has seen it.
+                Err(e) if e.code() == Some(&ErrorCode::InvalidInput) => {
+                    self.store.refuse_pending_mark(&self.refusal(&mark, now))?;
+                }
                 Err(e) => return Err(e.into()),
             }
-            self.store.remove_pending_mark(mark.client_id)?;
             self.status.pending_marks = self.status.pending_marks.saturating_sub(1);
             any = true;
         }
         Ok(any)
+    }
+
+    /// The refused-mark notice for `mark`, with the name this device knows.
+    fn refusal(&self, mark: &MarkRequest, now: Timestamp) -> RefusedMark {
+        let person = self
+            .cached
+            .as_ref()
+            .and_then(|c| c.snapshot.staff.iter().find(|s| s.id == mark.staff_id));
+        RefusedMark {
+            client_id: mark.client_id,
+            staff_id: mark.staff_id,
+            business_date: mark.business_date,
+            kind: mark.kind,
+            first_name: person.map(|p| p.first_name.clone()).unwrap_or_default(),
+            last_name: person.map(|p| p.last_name.clone()).unwrap_or_default(),
+            refused_at: now,
+        }
     }
 
     /// Keeps a confirmed mark visible even if the following snapshot fetch
@@ -909,16 +932,56 @@ mod tests {
     }
 
     #[test]
-    fn marks_the_server_refuses_are_dropped() {
+    fn marks_the_server_refuses_leave_the_queue_with_a_notice() {
         let mut e = engine();
         block_on(e.tick(now())).unwrap();
         e.backend().with(|s| s.reject_marks = true);
-        e.queue_mark(STAFF, BLOCK, date(2026, 10, 5), MarkKind::In, now())
+        let day = date(2026, 10, 5);
+        let id = e
+            .queue_mark(STAFF, BLOCK, day, MarkKind::In, now())
             .unwrap();
+        assert_eq!(e.core_snapshot().unwrap().unwrap().marks.len(), 1);
+
         block_on(e.tick(now() + secs(5))).unwrap();
         assert!(e.status().online);
         assert_eq!(e.status().pending_marks, 0);
         assert!(e.store().pending_marks().unwrap().is_empty());
+        // The row goes back to unmarked, and the refusal is kept for the UI.
+        assert!(e.core_snapshot().unwrap().unwrap().marks.is_empty());
+        assert_eq!(
+            e.store().refused_marks().unwrap(),
+            [RefusedMark {
+                client_id: id,
+                staff_id: STAFF,
+                business_date: day,
+                kind: MarkKind::In,
+                first_name: "Μαρία".into(),
+                last_name: "Παππά".into(),
+                refused_at: now() + secs(5),
+            }]
+        );
+        // Marking again queues a fresh attempt.
+        e.backend().with(|s| s.reject_marks = false);
+        let again = e
+            .queue_mark(STAFF, BLOCK, day, MarkKind::In, now())
+            .unwrap();
+        assert_ne!(again, id);
+        block_on(e.tick(now() + secs(10))).unwrap();
+        assert_eq!(e.snapshot().unwrap().marks[0].id, again);
+        // The notice stays until dismissed.
+        assert_eq!(e.store().refused_marks().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn other_server_errors_keep_the_mark_queued() {
+        let mut e = engine();
+        block_on(e.tick(now())).unwrap();
+        e.queue_mark(STAFF, BLOCK, date(2026, 10, 5), MarkKind::In, now())
+            .unwrap();
+        e.backend().with(|s| s.offline = true);
+        block_on(e.tick(now() + secs(5))).unwrap();
+        assert_eq!(e.status().pending_marks, 1);
+        assert!(e.store().refused_marks().unwrap().is_empty());
     }
 
     #[test]

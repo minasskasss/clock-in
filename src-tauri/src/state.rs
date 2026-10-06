@@ -372,8 +372,26 @@ impl AppState {
             .as_ref()
             .map(|s| views::banners(s, self.clock.now()))
             .unwrap_or_default();
+        drop(published);
         banners.sound_off = self.sound_off.load(Ordering::Relaxed);
+        match lock(&self.ui_store).refused_marks() {
+            Ok(refused) => {
+                banners.refused_marks =
+                    views::refused_marks(&refused, self.clock.now(), self.rollover());
+            }
+            Err(e) => eprintln!("clock-in: could not read the refused marks: {e}"),
+        }
         banners
+    }
+
+    /// «Εντάξει» on a refused-mark notice.
+    ///
+    /// # Errors
+    ///
+    /// If the local database can't be written.
+    pub fn dismiss_refused_mark(&self, id: Uuid) -> Result<(), CmdError> {
+        lock(&self.ui_store).dismiss_refused_mark(id)?;
+        Ok(())
     }
 
     /// Records whether Windows sound output is muted, at zero or missing.

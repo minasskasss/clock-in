@@ -46,6 +46,18 @@ export interface Banners {
   horizonShort: boolean;
   /** Windows sound output muted, at zero or missing. */
   soundOff: boolean;
+  /** Marks the server refused (not saved), oldest first, until dismissed. */
+  refusedMarks: RefusedMark[];
+}
+
+export interface RefusedMark {
+  id: string;
+  /** Empty if this device didn't know the person. */
+  firstName: string;
+  lastName: string;
+  kind: MarkKind;
+  /** ISO business date, only if it isn't the day shown on Today. */
+  otherDate: string | null;
 }
 
 export interface AppStateView {
@@ -234,6 +246,7 @@ export const api = {
       businessDate: row.businessDate,
       kind,
     }),
+  dismissRefusedMark: (id: string) => call<void>("dismiss_refused_mark", { id }),
   adminLogin: (passphrase: string) => call<void>("admin_login", { passphrase }),
   adminLogout: () => call<void>("admin_logout"),
   adminTouch: () => call<void>("admin_touch"),
