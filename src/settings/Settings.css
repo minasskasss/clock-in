@@ -19,6 +19,19 @@
   font-weight: 700;
 }
 
+/* Android phones held upright: the title under «Πίσω», lined up with the card's content. */
+@media (orientation: portrait) {
+  :root[data-platform="android"] .settings__bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  :root[data-platform="android"] .settings__title {
+    padding-left: clamp(var(--space-5), 3vw, var(--space-6));
+  }
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;

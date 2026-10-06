@@ -211,8 +211,9 @@
   text-decoration-thickness: 4px;
 }
 
+/* Narrow Windows windows (Android phones have their own layout below). */
 @media (max-width: 560px) {
-  .row {
+  :root:not([data-platform="android"]) .row {
     grid-template-columns: 1fr;
     grid-template-areas:
       "name"
@@ -220,8 +221,76 @@
       "status";
   }
 
-  .row__status {
+  :root:not([data-platform="android"]) .row__status {
     justify-self: start;
+  }
+}
+
+/*
+ * Android phones held upright: smaller clock and names, and the status pill
+ * on the name's line when both fit (otherwise on its own line under it).
+ * Sizes are in rem, so Android's font-size setting still scales them.
+ */
+@media (orientation: portrait) {
+  :root[data-platform="android"] .today {
+    gap: var(--space-3);
+  }
+
+  :root[data-platform="android"] .today__head {
+    gap: var(--space-2) var(--space-4);
+  }
+
+  :root[data-platform="android"] .today__weekday {
+    font-size: 1.625rem;
+  }
+
+  :root[data-platform="android"] .today__day {
+    font-size: 1.0625rem;
+  }
+
+  :root[data-platform="android"] .today__clock {
+    font-size: 2.75rem;
+  }
+
+  :root[data-platform="android"] .today__empty {
+    font-size: 1.375rem;
+  }
+
+  :root[data-platform="android"] .rows {
+    gap: var(--space-2);
+  }
+
+  :root[data-platform="android"] .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-2);
+    padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+    border-left-width: 8px;
+  }
+
+  :root[data-platform="android"] .row__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 1.3125rem;
+    overflow-wrap: anywhere;
+  }
+
+  :root[data-platform="android"] .row__status {
+    margin-left: auto;
+    padding: var(--space-1) var(--space-3);
+    font-size: 0.875rem;
+  }
+
+  :root[data-platform="android"] .row__hours {
+    order: 1;
+    flex-basis: 100%;
+    font-size: 1rem;
+  }
+
+  :root[data-platform="android"] .row--left .row__name,
+  :root[data-platform="android"] .row--left .row__hours {
+    text-decoration-thickness: 3px;
   }
 }
 

@@ -82,6 +82,48 @@
   gap: var(--space-2);
 }
 
+/* Android phones held upright: a smaller header that fits the screen width. */
+@media (orientation: portrait) {
+  :root[data-platform="android"] .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-platform="android"] .app__header {
+    gap: var(--space-2);
+  }
+
+  :root[data-platform="android"] .app__brand {
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  :root[data-platform="android"] .brand {
+    gap: 8px;
+  }
+
+  :root[data-platform="android"] .brand__icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  :root[data-platform="android"] .brand__name {
+    width: auto;
+    height: 22px;
+  }
+
+  :root[data-platform="android"] .env-badge {
+    padding: 1px 6px;
+    font-size: 0.625rem;
+    white-space: nowrap;
+  }
+
+  :root[data-platform="android"] .app__actions .round-button,
+  :root[data-platform="android"] .quick-menu__button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .app__main {
   display: grid;
   align-content: start;

@@ -33,6 +33,12 @@ export default function App() {
   // put off once; later it is in the menu and behind the Today banner.
   const [onboarding, setOnboarding] = useState(() => readPreference(ONBOARDING_KEY) !== "done");
 
+  // `data-platform` on <html> lets the CSS give Android phones their own sizes.
+  const platform = state?.platform;
+  useEffect(() => {
+    if (platform) document.documentElement.dataset.platform = platform;
+  }, [platform]);
+
   // Tray → Quit (Rust shows this window first, then asks for the quit code).
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -92,7 +98,14 @@ export default function App() {
   } else if (showOnboarding) {
     main = <Onboarding permissions={android.permissions} permissionsOk={android.permissionsOk} onDone={finishOnboarding} />;
   } else if (inSettings) {
-    main = <Settings dataVersion={state.dataVersion} lockoutRemainingS={state.lockoutRemainingS} onExit={exitSettings} />;
+    main = (
+      <Settings
+        dataVersion={state.dataVersion}
+        lockoutRemainingS={state.lockoutRemainingS}
+        platform={state.platform}
+        onExit={exitSettings}
+      />
+    );
   } else {
     main = (
       <Today
