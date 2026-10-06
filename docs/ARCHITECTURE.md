@@ -63,12 +63,15 @@ C:\dev\clock-in\
   src/                         React + TS UI; Greek only, every string in src/i18n/el.json
   src-tauri/                   Tauri app (Rust): sync loop, secrets, admin session, commands; scheduler, audio, tray (Phase 4)
   plugins/clockin-alarm/       Tauri plugin: Rust side + android/ (Kotlin)
+  src-tauri/gen/android/       the generated Android Studio project (signing, minSdk, icons)
   supabase/migrations/         SQL migrations (schema, functions, grants, cron)
   assets/sounds/               generated check-in / check-out WAVs
   assets/icon/                 app icon sources (SVG): full design, hand-tuned 16/20/24/32/48 px, Android adaptive parts, icons.json
   assets/eff_large_wordlist.txt   (downloaded in Phase 0, SHA-256 recorded in DECISIONS)
   tools/gen-sounds/            small Rust bin that synthesises the sounds
   tools/generate-passphrase.ps1
+  tools/android-env.ps1        Android build environment on Windows (JDK, SDK, NDK, MSYS2 Perl/make for OpenSSL)
+  tools/build-apk.ps1          signed release APK, `-Env dev` (test phone) or `-Env prod` (employer)
   tools/build-icons.mjs        `pnpm icons`: every icon in src-tauri/icons from assets/icon (tauri icon + an .ico with the tuned layers)
   .env.example                 SUPABASE_URL=, SUPABASE_PUBLISHABLE_KEY=   (committed, empty values)
   .env.dev / .env.prod         real values (gitignored)
@@ -229,16 +232,17 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 ## 10. Alarms — Android (Kotlin plugin `clockin-alarm`)
 
-**Commands exposed to Rust:**
+**Commands exposed to Rust** (Rust calls them off the main thread; see DECISIONS, Phase 5):
 
-- `setPlan(items, alertMode)`
+- `setPlan(items, alertMode, configVersion, horizonEnd)`: Rust sends its own 14-day plan without the alarms that marks known on the phone suppress
 - `permissionStatus()`
-- `openPermissionSettings(kind)`
-- `requestBatteryExemption()`
-- `secretGet/Put(key, value)`
+- `openSettings(kind)` (notifications, exact alarms, full-screen, battery exemption, "pause if unused", the maker step)
+- `setOemDone(done)`
+- `secretGet/Set/Delete(name, value)`
 - `setServerConfig(url, publishableKey)`
+- `deviceName()`
 
-**Persisted** (app-private storage): the plan, the alert mode and the server config.
+**Persisted** (device-protected app storage, so alarms work after a reboot before the first unlock): the plan, the alert mode, the server config, the handled alarms, the ring cycle in progress, and the Keystore-encrypted secrets.
 
 **Scheduling**
 
@@ -257,11 +261,11 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 - Declare `USE_EXACT_ALARM`; the APK is sideloaded and alarm-centric.
 - Fall back to `SCHEDULE_EXACT_ALARM` plus `canScheduleExactAlarms()` checks.
-- Verify both against the current docs.
+- Verified (DECISIONS, Phase 5): `USE_EXACT_ALARM` is granted at install on Android 13+; `SCHEDULE_EXACT_ALARM` has `maxSdkVersion 32`.
 
 **On fire** (`BroadcastReceiver`)
 
-1. Start the ringing foreground service. Starting it from an exact alarm is an allowed background start. Verify the correct FGS type on Android 14–16 and record it in DECISIONS.
+1. Start the ringing foreground service. Starting it from an exact alarm is an allowed background start. Its type is `systemExempted` on Android 14+ (allowed with an exact-alarm permission) and `mediaPlayback` on 10–13 (DECISIONS, Phase 5).
 2. Call `check_alarm(item_ids)` with a 3 s timeout.
 3. If nothing is due, stop silently. If `config_version` is newer than the stored plan's, enqueue a one-time plan refresh first.
 4. **Ring mode:**

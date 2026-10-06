@@ -211,12 +211,13 @@ The shop PC polls prod all day, so prod won't pause.
    - **SDK Platforms:** the newest Android version.
    - **SDK Tools:** Android SDK Build-Tools, **NDK (Side by side)**, Android SDK Command-line Tools (latest), Android SDK Platform-Tools.
    - Click **Apply** and wait.
-3. **Environment variables:** Claude Code will give you the exact values. Typically:
+3. **Environment variables:** Claude Code gives you the exact values. On this laptop (Phase 5):
    - `JAVA_HOME` = `C:\Program Files\Android\Android Studio\jbr`
-   - `ANDROID_HOME` = `%LOCALAPPDATA%\Android\Sdk`
-   - `NDK_HOME` = `%ANDROID_HOME%\ndk\<version>`
+   - `ANDROID_HOME` = `C:\Users\minas\AppData\Local\Android\Sdk`
+   - `NDK_HOME` = `C:\Users\minas\AppData\Local\Android\Sdk\ndk\30.0.16248370` (change the last folder if a newer NDK is installed)
    - Set them via Start → "Edit environment variables for your account" → New.
    - Then quit the Claude desktop app completely and reopen it.
+   - The Android build also uses MSYS2 (`C:\msys64`) with its `perl` and `make` (Claude Code added `make` with `pacman` in Phase 5). `tools\android-env.ps1` sets up the rest for each build.
 4. **Test phone** (your own Android phone, or any spare one):
    - Settings → About phone → tap **Build number** 7 times;
    - Developer options → turn on **USB debugging**;
