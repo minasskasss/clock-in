@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, isNoSession, type AdminView } from "../api";
+import { api, isNoSession, type AdminView, type Platform } from "../api";
 import { FormMessage } from "../components/Field";
 import { Unlock } from "../components/Unlock";
 import { errorMessage } from "../errors";
@@ -21,12 +21,13 @@ interface SettingsProps {
   /** Changes whenever server data changed; the lists reload. */
   dataVersion: number;
   lockoutRemainingS: number;
+  platform: Platform;
   /** Leave Settings (they lock). */
   onExit: () => void;
 }
 
 /** The passphrase-protected Settings (SPEC §4). */
-export function Settings({ dataVersion, lockoutRemainingS, onExit }: SettingsProps) {
+export function Settings({ dataVersion, lockoutRemainingS, platform, onExit }: SettingsProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("staff");
   const [view, setView] = useState<AdminView | null>(null);
@@ -124,7 +125,7 @@ export function Settings({ dataVersion, lockoutRemainingS, onExit }: SettingsPro
             {tab === "staff" && <StaffPanel />}
             {tab === "overrides" && <OverridesPanel />}
             {tab === "marks" && <MarksPanel />}
-            {tab === "alarms" && <AlarmsPanel />}
+            {tab === "alarms" && <AlarmsPanel platform={platform} />}
             {tab === "devices" && <DevicesPanel />}
             {tab === "codes" && (
               <div className="panel-stack">

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "../api";
+import { api, type Platform } from "../api";
 import { Field, FormMessage } from "../components/Field";
 import { errorMessage } from "../errors";
 import { useAdmin } from "./admin";
@@ -16,8 +16,12 @@ function offsetChoices(current: number): number[] {
   return [...values].sort((a, b) => a - b);
 }
 
-/** Settings → offsets, rollover, autostart (SPEC §4.4). The quit code is under Codes. */
-export function AlarmsPanel() {
+/**
+ * Settings → offsets, rollover, autostart (SPEC §4.4). The quit code is under Codes.
+ * Autostart is the shop PC's setting: Android doesn't show it and saves the
+ * server's latest value, so a change made on the PC stays.
+ */
+export function AlarmsPanel({ platform }: { platform: Platform }) {
   const { t } = useTranslation();
   const { view, run } = useAdmin();
   const s = view.settings;
@@ -25,6 +29,7 @@ export function AlarmsPanel() {
   const [checkout, setCheckout] = useState(s.checkoutOffsetMin);
   const [rollover, setRollover] = useState(s.rollover);
   const [autostart, setAutostart] = useState(s.autostart);
+  const showAutostart = platform !== "android";
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
@@ -43,7 +48,7 @@ export function AlarmsPanel() {
           checkinOffsetMin: checkin,
           checkoutOffsetMin: checkout,
           rollover,
-          autostart,
+          autostart: showAutostart ? autostart : view.settings.autostart,
           quitCode: null,
         }),
       );
@@ -90,10 +95,12 @@ export function AlarmsPanel() {
             ))}
           </select>
         </Field>
-        <label className="checkbox">
-          <input type="checkbox" checked={autostart} onChange={(e) => setAutostart(e.target.checked)} disabled={busy} />
-          {t("alarms.autostart")}
-        </label>
+        {showAutostart && (
+          <label className="checkbox">
+            <input type="checkbox" checked={autostart} onChange={(e) => setAutostart(e.target.checked)} disabled={busy} />
+            {t("alarms.autostart")}
+          </label>
+        )}
         {message && <FormMessage tone={message.tone}>{message.text}</FormMessage>}
         <div className="form__actions">
           <button type="submit" className="button button--primary" disabled={busy}>
