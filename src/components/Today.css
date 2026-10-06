@@ -77,6 +77,14 @@
   color: var(--text);
 }
 
+/* Android: a permission the alarms need is missing, with a button to fix it. */
+.banner--permissions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .banner__text {
   flex: 1;
   margin: 0;

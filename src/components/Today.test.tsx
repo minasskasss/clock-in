@@ -4,12 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import { callsTo, mockCommands, row, today } from "../test/tauri";
 import { Today } from "./Today";
 
+const windows = { platform: "windows" as const, permissionsMissing: false, onFixPermissions: () => {} };
 const noBanners = { offline: false, lastSync: null, clockSkew: false, horizonShort: false, soundOff: false, refusedMarks: [] };
 
 describe("Today view", () => {
   it("shows the header, every row with its hours and status, and (+1) after midnight", () => {
     render(
-      <Today
+      <Today {...windows}
         today={today([
           row(),
           row({ key: "b2", sourceBlockId: "b2", start: "19:00", end: "02:00", endNextDay: true, status: "late" }),
@@ -39,7 +40,7 @@ describe("Today view", () => {
     const calls = mockCommands({ mark: null });
     const onChanged = vi.fn();
     const user = userEvent.setup();
-    render(<Today today={today()} banners={noBanners} onChanged={onChanged} />);
+    render(<Today {...windows} today={today()} banners={noBanners} onChanged={onChanged} />);
 
     await user.click(screen.getByRole("button", { name: /Μαρία Παππά/ }));
     const dialog = screen.getByRole("dialog", { name: "Άφιξη" });
@@ -57,7 +58,7 @@ describe("Today view", () => {
   it("asks 'left' for a checked-in row, and Cancel sends nothing", async () => {
     const calls = mockCommands({ mark: null });
     const user = userEvent.setup();
-    render(<Today today={today([row({ status: "checked_in", nextMark: "out" })])} banners={noBanners} onChanged={() => {}} />);
+    render(<Today {...windows} today={today([row({ status: "checked_in", nextMark: "out" })])} banners={noBanners} onChanged={() => {}} />);
 
     await user.click(screen.getByRole("button", { name: /Μαρία Παππά/ }));
     const dialog = screen.getByRole("dialog", { name: "Αποχώρηση" });
@@ -68,19 +69,19 @@ describe("Today view", () => {
   });
 
   it("shows the empty state and the loading state", () => {
-    const { rerender } = render(<Today today={today([])} banners={noBanners} onChanged={() => {}} />);
+    const { rerender } = render(<Today {...windows} today={today([])} banners={noBanners} onChanged={() => {}} />);
     expect(screen.getByText("Κανείς δεν δουλεύει σήμερα")).toBeInTheDocument();
-    rerender(<Today today={null} banners={noBanners} onChanged={() => {}} />);
+    rerender(<Today {...windows} today={null} banners={noBanners} onChanged={() => {}} />);
     expect(screen.getByText("Φόρτωση του σημερινού προγράμματος…")).toBeInTheDocument();
-    rerender(<Today today={null} banners={{ ...noBanners, offline: true }} onChanged={() => {}} />);
+    rerender(<Today {...windows} today={null} banners={{ ...noBanners, offline: true }} onChanged={() => {}} />);
     expect(screen.getByText(/Δεν υπάρχει σύνδεση και δεν έχει φορτωθεί/)).toBeInTheDocument();
   });
 
   it("shows banners only when relevant", () => {
-    const { rerender } = render(<Today today={today()} banners={noBanners} onChanged={() => {}} />);
+    const { rerender } = render(<Today {...windows} today={today()} banners={noBanners} onChanged={() => {}} />);
     expect(screen.queryAllByRole("status")).toHaveLength(0);
     rerender(
-      <Today
+      <Today {...windows}
         today={today()}
         banners={{
           offline: true,
@@ -105,7 +106,7 @@ describe("Today view", () => {
     const onChanged = vi.fn();
     const user = userEvent.setup();
     render(
-      <Today
+      <Today {...windows}
         today={today()}
         banners={{
           ...noBanners,

@@ -1,0 +1,95 @@
+/* Android onboarding checklist (SPEC §8.2): large, plain, one item per row. */
+
+.onboarding {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 720px;
+  justify-self: center;
+}
+
+.onboarding__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.onboarding__intro {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1.0625rem;
+}
+
+.onboarding__done {
+  margin: 0;
+  color: var(--ok);
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.onboarding__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.checklist {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--surface-border);
+  border-left: 6px solid var(--status-due-edge);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+}
+
+.checklist__item--ok {
+  border-left-color: var(--status-in-edge);
+}
+
+.checklist__mark {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--danger);
+}
+
+.checklist__item--ok .checklist__mark {
+  color: var(--ok);
+}
+
+.checklist__body {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.checklist__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.checklist__help {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.checklist__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.checklist__actions:empty {
+  display: none;
+}

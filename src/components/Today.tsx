@@ -4,6 +4,7 @@ import {
   api,
   type Banners as BannerState,
   type MarkKind,
+  type Platform,
   type RefusedMark,
   type Row,
   type RowStatus,
@@ -35,12 +36,16 @@ const STATUS_LABEL = {
 interface TodayProps {
   today: TodayView | null;
   banners: BannerState;
+  platform: Platform;
+  /** Android: a permission the alarms need is missing (SPEC §6 banner). */
+  permissionsMissing: boolean;
+  onFixPermissions: () => void;
   /** Called after a mark so the screen updates at once. */
   onChanged: () => void;
 }
 
 /** The main screen (SPEC §6). */
-export function Today({ today, banners, onChanged }: TodayProps) {
+export function Today({ today, banners, platform, permissionsMissing, onFixPermissions, onChanged }: TodayProps) {
   const { t } = useTranslation();
   const [confirm, setConfirm] = useState<{ row: Row; kind: MarkKind } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +86,14 @@ export function Today({ today, banners, onChanged }: TodayProps) {
         )}
       </div>
 
-      <Banners banners={banners} today={today?.businessDate ?? null} onChanged={onChanged} />
+      <Banners
+        banners={banners}
+        today={today?.businessDate ?? null}
+        phone={platform === "android"}
+        permissionsMissing={permissionsMissing}
+        onFixPermissions={onFixPermissions}
+        onChanged={onChanged}
+      />
 
       {today === null ? (
         <p className="today__empty">{banners.offline ? t("today.noData") : t("today.syncing")}</p>
@@ -191,10 +203,17 @@ function RefusedNotice({ mark, onChanged }: { mark: RefusedMark; onChanged: () =
 function Banners({
   banners,
   today,
+  phone,
+  permissionsMissing,
+  onFixPermissions,
   onChanged,
 }: {
   banners: BannerState;
   today: string | null;
+  /** Android wording ("this phone") instead of Windows. */
+  phone: boolean;
+  permissionsMissing: boolean;
+  onFixPermissions: () => void;
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
@@ -208,11 +227,19 @@ function Banners({
     });
   }
   if (banners.soundOff) items.push({ key: "sound", text: t("banner.soundOff") });
-  if (banners.clockSkew) items.push({ key: "skew", text: t("banner.clockSkew") });
-  if (banners.horizonShort) items.push({ key: "horizon", text: t("banner.horizonShort") });
-  if (items.length === 0 && banners.refusedMarks.length === 0) return null;
+  if (banners.clockSkew) items.push({ key: "skew", text: t(phone ? "banner.clockSkewPhone" : "banner.clockSkew") });
+  if (banners.horizonShort) items.push({ key: "horizon", text: t(phone ? "banner.horizonShortPhone" : "banner.horizonShort") });
+  if (items.length === 0 && banners.refusedMarks.length === 0 && !permissionsMissing) return null;
   return (
     <div className="banners">
+      {permissionsMissing && (
+        <div className="banner banner--permissions" role="alert">
+          <p className="banner__text">{t("banner.permissions")}</p>
+          <button type="button" className="button button--primary" onClick={onFixPermissions}>
+            {t("banner.fix")}
+          </button>
+        </div>
+      )}
       {banners.refusedMarks.map((mark) => (
         <RefusedNotice key={mark.id} mark={mark} onChanged={onChanged} />
       ))}

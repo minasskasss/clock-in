@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, type AppStateView } from "../api";
+import { api, type AlertMode, type AndroidView, type AppStateView, type Platform } from "../api";
 import { formatDateTime, parseDateTime } from "../dates";
 import { THEME_PREFERENCES, type ThemePreference } from "../theme/theme";
 import "./QuickMenu.css";
@@ -8,13 +8,32 @@ import "./QuickMenu.css";
 interface QuickMenuProps {
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
+  platform: Platform;
+  /** Android, paired: the alert mode and the permission checklist. */
+  android?: AndroidView | null;
+  onAndroidChange?: () => void;
+  onOpenPermissions?: () => void;
   /** Debug builds only: profile and fake clock. */
   debug?: AppStateView["debug"];
   onDebugChange?: () => void;
 }
 
-/** Theme menu (and the debug tools in debug builds). Needs no passphrase (SPEC §3). */
-export function QuickMenu({ theme, onThemeChange, debug, onDebugChange }: QuickMenuProps) {
+const ALERT_MODES: AlertMode[] = ["ring", "notification"];
+
+/**
+ * Theme menu; on Android also the alert mode and the permission checklist
+ * (and the debug tools in debug builds). Needs no passphrase (SPEC §3, §8.2).
+ */
+export function QuickMenu({
+  theme,
+  onThemeChange,
+  platform,
+  android,
+  onAndroidChange,
+  onOpenPermissions,
+  debug,
+  onDebugChange,
+}: QuickMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -70,8 +89,39 @@ export function QuickMenu({ theme, onThemeChange, debug, onDebugChange }: QuickM
                 </button>
               ))}
             </div>
-            <p className="quick-menu__note">{t(`theme.${theme}Hint`)}</p>
+            <p className="quick-menu__note">
+              {t(theme === "system" && platform === "android" ? "theme.systemHintAndroid" : `theme.${theme}Hint`)}
+            </p>
           </fieldset>
+          {android && (
+            <fieldset className="quick-menu__group">
+              <legend className="quick-menu__legend">{t("alertMode.title")}</legend>
+              <div className="segmented">
+                {ALERT_MODES.map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className="segmented__option"
+                    aria-pressed={android.alertMode === mode}
+                    onClick={() => void api.setAlertMode(mode).then(onAndroidChange, () => {})}
+                  >
+                    {t(`alertMode.${mode}`)}
+                  </button>
+                ))}
+              </div>
+              <p className="quick-menu__note">{t(`alertMode.${android.alertMode}Hint`)}</p>
+              <button
+                type="button"
+                className="button button--quiet"
+                onClick={() => {
+                  setOpen(false);
+                  onOpenPermissions?.();
+                }}
+              >
+                {android.permissionsOk ? "✓" : "✗"} {t("menu.permissions")}
+              </button>
+            </fieldset>
+          )}
           {debug && <DebugSection debug={debug} onChange={onDebugChange} />}
         </div>
       )}

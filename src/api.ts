@@ -74,6 +74,36 @@ export interface AppStateView {
   autoDark: boolean;
   /** Whether Quit asks for the quit code (false before one is known). */
   quitCodeSet: boolean;
+  platform: Platform;
+  /** Android only. */
+  android: AndroidView | null;
+}
+
+export type AlertMode = "ring" | "notification";
+
+/** One Android checklist item (src-tauri: `android_open_settings`). */
+export type PermissionKind = "notifications" | "exactAlarms" | "fullScreen" | "battery" | "unusedApps" | "oem";
+
+/** The Android onboarding checklist (SPEC §8.2). */
+export interface PermissionStatus {
+  notifications: boolean;
+  exactAlarms: boolean;
+  fullScreen: boolean;
+  battery: boolean;
+  /** "Pause app activity if unused" is off. */
+  unusedApps: boolean;
+  /** The phone maker if it needs an extra step ("samsung", "xiaomi", …), or "". */
+  oem: string;
+  /** The user said the maker step is done (it can't be checked). */
+  oemDone: boolean;
+}
+
+export interface AndroidView {
+  alertMode: AlertMode;
+  /** Null until Android was first asked. */
+  permissions: PermissionStatus | null;
+  /** Everything the alarms need is granted (the maker step is advice). */
+  permissionsOk: boolean;
 }
 
 /** The alarm window's content (src-tauri/src/alarms.rs). Times are "HH:MM". */
@@ -277,4 +307,9 @@ export const api = {
   /** Exits the app if `code` is the quit code; otherwise rejects. */
   quit: (code: string) => call<void>("quit", { code }),
   debugSetClock: (local: string | null, second = false) => call<void>("debug_set_clock", { local, second }),
+  /** Android: ring or notification, per device. */
+  setAlertMode: (mode: AlertMode) => call<void>("set_alert_mode", { mode }),
+  /** Android: opens the phone's screen that fixes one checklist item. */
+  androidOpenSettings: (kind: PermissionKind) => call<void>("android_open_settings", { kind }),
+  androidSetOemDone: (done: boolean) => call<void>("android_set_oem_done", { done }),
 };

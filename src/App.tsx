@@ -6,16 +6,21 @@ import { api } from "./api";
 import { Background } from "./components/Background";
 import { Brand } from "./components/Brand";
 import { FirstRun } from "./components/FirstRun";
+import { Onboarding } from "./components/Onboarding";
 import { QuitDialog } from "./components/QuitDialog";
 import { QuickMenu } from "./components/QuickMenu";
 import { Today } from "./components/Today";
 import { Unlock } from "./components/Unlock";
 import { Settings } from "./settings/Settings";
+import { readPreference, writePreference } from "./storage";
 import { useTheme } from "./theme/useTheme";
 import { useAppState } from "./useAppState";
 
 /** Sent by Rust when Quit is chosen in the tray (src-tauri/src/tray.rs). */
 export const QUIT_REQUESTED = "quit-requested";
+
+/** Android: the onboarding checklist was finished or put off once on this phone. */
+const ONBOARDING_KEY = "clockin.onboarding";
 
 export default function App() {
   const { t } = useTranslation();
@@ -24,6 +29,9 @@ export default function App() {
   const [screen, setScreen] = useState<"today" | "settings">("today");
   const [unlocking, setUnlocking] = useState(false);
   const [quitting, setQuitting] = useState(false);
+  // Android: the checklist opens by itself after pairing, until finished or
+  // put off once; later it is in the menu and behind the Today banner.
+  const [onboarding, setOnboarding] = useState(() => readPreference(ONBOARDING_KEY) !== "done");
 
   // Tray → Quit (Rust shows this window first, then asks for the quit code).
   useEffect(() => {
@@ -40,6 +48,12 @@ export default function App() {
   }, []);
 
   const paired = state?.phase === "paired";
+  const android = state?.android ?? null;
+  const showOnboarding = paired && android !== null && onboarding;
+  const finishOnboarding = () => {
+    writePreference(ONBOARDING_KEY, "done");
+    setOnboarding(false);
+  };
   // Settings show only while unlocked: idle time or unpairing locks them.
   const inSettings = paired && screen === "settings" && state.adminUnlocked;
 
@@ -75,10 +89,21 @@ export default function App() {
         }}
       />
     );
+  } else if (showOnboarding) {
+    main = <Onboarding permissions={android.permissions} permissionsOk={android.permissionsOk} onDone={finishOnboarding} />;
   } else if (inSettings) {
     main = <Settings dataVersion={state.dataVersion} lockoutRemainingS={state.lockoutRemainingS} onExit={exitSettings} />;
   } else {
-    main = <Today today={state.today} banners={state.banners} onChanged={() => void refresh()} />;
+    main = (
+      <Today
+        today={state.today}
+        banners={state.banners}
+        platform={state.platform}
+        permissionsMissing={android !== null && !android.permissionsOk}
+        onFixPermissions={() => setOnboarding(true)}
+        onChanged={() => void refresh()}
+      />
+    );
   }
 
   return (
@@ -91,12 +116,21 @@ export default function App() {
             {state?.environment === "dev" && <span className="env-badge">{t("app.devBadge")}</span>}
           </div>
           <div className="app__actions">
-            {paired && !inSettings && (
+            {paired && !inSettings && !showOnboarding && (
               <button type="button" className="round-button" aria-label={t("today.settings")} title={t("today.settings")} onClick={openSettings}>
                 <GearIcon />
               </button>
             )}
-            <QuickMenu theme={theme} onThemeChange={setTheme} debug={state?.debug ?? null} onDebugChange={() => void refresh()} />
+            <QuickMenu
+              theme={theme}
+              onThemeChange={setTheme}
+              platform={state?.platform ?? "windows"}
+              android={paired ? android : null}
+              onAndroidChange={() => void refresh()}
+              onOpenPermissions={() => setOnboarding(true)}
+              debug={state?.debug ?? null}
+              onDebugChange={() => void refresh()}
+            />
           </div>
         </header>
         <main className="app__main">{main}</main>

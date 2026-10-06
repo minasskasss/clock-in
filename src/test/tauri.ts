@@ -66,6 +66,8 @@ export function appState(overrides: Partial<AppStateView> = {}): AppStateView {
     dataVersion: 1,
     autoDark: false,
     quitCodeSet: true,
+    platform: "windows",
+    android: null,
     ...overrides,
   };
 }
