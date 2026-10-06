@@ -15,12 +15,10 @@ val tauriProperties = Properties().apply {
 }
 
 // Release signing (docs/DECISIONS.md, Phase 5). The keystore and its
-// passwords live outside the repo, in C:/dev/clock-in-keys/ (or wherever
-// CLOCKIN_KEYSTORE_PROPERTIES points). Without that file, release builds are
-// left unsigned.
+// passwords live outside the repo, only in C:/dev/clock-in-keys/. Without
+// that file (CI, other machines), release builds are left unsigned.
 val keystoreProperties = Properties().apply {
-    val path = System.getenv("CLOCKIN_KEYSTORE_PROPERTIES") ?: "C:/dev/clock-in-keys/keystore.properties"
-    val propFile = file(path)
+    val propFile = file("C:/dev/clock-in-keys/keystore.properties")
     if (propFile.exists()) {
         propFile.inputStream().use { load(it) }
     }

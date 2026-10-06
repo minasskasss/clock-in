@@ -10,7 +10,9 @@
 .DESCRIPTION
   One APK for real phones (arm64-v8a and armeabi-v7a), signed with the
   keystore in C:\dev\clock-in-keys\ (keystore.properties). Copied to
-  target\apk\clock-in-<version>-dev.apk or target\apk\clock-in-<version>.apk.
+  target\apk\clock-in-<version>-dev.apk or
+  C:\dev\clock-in-releases\<version>-prod\clock-in-<version>.apk. Fails if a
+  library embeds the wrong project's URL.
 
   The Rust library is built with cargo and packaged with Gradle directly,
   instead of `pnpm tauri android build`, which needs Windows Developer Mode
@@ -28,7 +30,7 @@ $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 $android = Join-Path $root 'src-tauri\gen\android'
 
-$properties = if ($env:CLOCKIN_KEYSTORE_PROPERTIES) { $env:CLOCKIN_KEYSTORE_PROPERTIES } else { 'C:\dev\clock-in-keys\keystore.properties' }
+$properties = 'C:\dev\clock-in-keys\keystore.properties'
 if (-not (Test-Path $properties)) { throw "No signing keystore settings at $properties (see docs/SETUP.md §6)." }
 if (-not (Test-Path (Join-Path $root ".env.$Env"))) { throw "Missing .env.$Env" }
 if (-not (Test-Path (Join-Path $android 'app\tauri.build.gradle.kts'))) {
@@ -40,14 +42,32 @@ $env:CLOCKIN_ENV = $Env
 pnpm build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
 
+# The project URL each .env file names (public; never printed).
+function Get-ProjectUrl([string]$name) {
+    $line = Get-Content (Join-Path $root ".env.$name") -ErrorAction SilentlyContinue |
+        Where-Object { $_ -match '^\s*SUPABASE_URL\s*=\s*\S' } | Select-Object -First 1
+    if ($line) { ($line -split '=', 2)[1].Trim() } else { $null }
+}
+$wantUrl = Get-ProjectUrl $Env
+$otherUrl = Get-ProjectUrl $(if ($Env -eq 'dev') { 'prod' } else { 'dev' })
+if (-not $wantUrl) { throw ".env.$Env has no SUPABASE_URL." }
+$latin1 = [Text.Encoding]::GetEncoding(28591)
+
 $abis = [ordered]@{ 'aarch64-linux-android' = 'arm64-v8a'; 'armv7-linux-androideabi' = 'armeabi-v7a' }
 foreach ($target in $abis.Keys) {
     & (Join-Path $PSScriptRoot 'android-env.ps1') cargo build --release --package clock-in --manifest-path src-tauri\Cargo.toml --target $target --features tauri/custom-protocol --lib
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed for $target." }
+    $lib = Join-Path $root "target\$target\release\libclockin_lib.so"
+    # The project URL and the «Δοκιμαστικό» badge come from the same CLOCKIN_ENV,
+    # so the right URL (and not the other one) means the right badge too.
+    $text = $latin1.GetString([IO.File]::ReadAllBytes($lib))
+    if (-not $text.Contains($wantUrl)) { throw "$target library does not talk to the $Env project." }
+    if ($otherUrl -and $otherUrl -ne $wantUrl -and $text.Contains($otherUrl)) { throw "$target library contains the other project's URL." }
     $jni = Join-Path $android "app\src\main\jniLibs\$($abis[$target])"
     New-Item -ItemType Directory -Force $jni | Out-Null
-    Copy-Item (Join-Path $root "target\$target\release\libclockin_lib.so") (Join-Path $jni 'libclockin_lib.so') -Force
+    Copy-Item $lib (Join-Path $jni 'libclockin_lib.so') -Force
 }
+Write-Host "Checked: both libraries talk to the $Env project only$(if ($Env -eq 'prod') { ' (no test badge)' })."
 # No library for other ABIs may be left over from an earlier build.
 Get-ChildItem (Join-Path $android 'app\src\main\jniLibs') -Directory |
     Where-Object { $abis.Values -notcontains $_.Name } |
@@ -64,7 +84,8 @@ Set-Location $root
 $built = Join-Path $android 'app\build\outputs\apk\universal\release\app-universal-release.apk'
 if (-not (Test-Path $built)) { throw "No signed APK at $built (was the keystore found?)." }
 $name = if ($Env -eq 'dev') { "clock-in-$version-dev.apk" } else { "clock-in-$version.apk" }
-$outDir = Join-Path $root 'target\apk'
+# Prod builds go next to the Windows installers, outside the repo.
+$outDir = if ($Env -eq 'dev') { Join-Path $root 'target\apk' } else { "C:\dev\clock-in-releases\$version-prod" }
 New-Item -ItemType Directory -Force $outDir | Out-Null
 $out = Join-Path $outDir $name
 Copy-Item $built $out -Force
