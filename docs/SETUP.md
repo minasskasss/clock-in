@@ -217,14 +217,27 @@ The shop PC polls prod all day, so prod won't pause.
    - `NDK_HOME` = `C:\Users\minas\AppData\Local\Android\Sdk\ndk\30.0.16248370` (change the last folder if a newer NDK is installed)
    - Set them via Start → "Edit environment variables for your account" → New.
    - Then quit the Claude desktop app completely and reopen it.
-   - The Android build also uses MSYS2 (`C:\msys64`) with its `perl` and `make` (Claude Code added `make` with `pacman` in Phase 5). `tools\android-env.ps1` sets up the rest for each build.
-4. **Test phone** (your own Android phone, or any spare one):
+4. **MSYS2 with Perl and make.** The Android build needs them; `tools\android-env.ps1` sets up the rest for each build.
+   - On this laptop they are already there (MSYS2 in `C:\msys64`; Claude Code added `make` in Phase 5). On a new laptop:
+     1. In **PowerShell**: `winget install --id MSYS2.MSYS2 -e`. Keep the default folder `C:\msys64`. Click **Yes** if Windows asks for permission.
+     2. Still in PowerShell, update MSYS2. Run this **twice**, because the first run may only update MSYS2 itself:
+        ```powershell
+        C:\msys64\usr\bin\bash.exe -lc "pacman -Syu --noconfirm"
+        ```
+     3. Install Perl and make:
+        ```powershell
+        C:\msys64\usr\bin\bash.exe -lc "pacman -S --needed --noconfirm perl make"
+        ```
+     4. Check: `C:\msys64\usr\bin\make.exe --version; C:\msys64\usr\bin\perl.exe -v`. Both print a version.
+   - Don't add `C:\msys64\usr\bin` to the Windows PATH; the build scripts use it only for Android builds.
+5. **Test phone** (your own Android phone, or any spare one):
    - Settings → About phone → tap **Build number** 7 times;
    - Developer options → turn on **USB debugging**;
    - connect it by USB and tap **Allow** on the phone.
    - No Android phone? Tell Claude Code; it will set up the emulator instead. The brand-specific checks then happen on your dad's phone at go-live.
-5. **End of Phase 5:** Claude Code creates the signing keystore in `C:\dev\clock-in-keys\`.
+6. **End of Phase 5:** Claude Code creates the signing keystore in `C:\dev\clock-in-keys\`: `clock-in.jks` (the key, alias `clock-in`) and `keystore.properties` (its path, alias and password; the store and key passwords are the same).
    - Copy that folder and the keystore passwords to **two** places: your password manager, plus a USB stick or private cloud drive.
+   - Builds read the key only from that folder. GitHub's checks build only a debug app (signed with a throwaway debug key) and never see it.
    - Without this key, future updates would force your dad to uninstall, reinstall and re-pair.
 
 ---
