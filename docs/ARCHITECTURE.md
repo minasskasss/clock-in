@@ -243,7 +243,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 - `setServerConfig(url, publishableKey)`
 - `deviceName()`
 
-**Persisted** (device-protected app storage, so alarms work after a reboot before the first unlock): the plan, the alert mode, the server config, the handled alarms, the ring cycle in progress, and the Keystore-encrypted secrets.
+**Persisted** (device-protected app storage, so alarms work after a reboot before the first unlock): the plan (times, kinds, staff names), the alert mode, the public server config, the handled alarms and the ring cycle in progress. The Keystore-encrypted secrets (device secret, local database key) stay in credential-encrypted storage, like the database itself: before the first unlock the pre-alarm check has no secret, so the alarm simply rings.
 
 **Scheduling**
 

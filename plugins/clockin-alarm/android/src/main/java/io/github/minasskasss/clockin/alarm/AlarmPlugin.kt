@@ -101,6 +101,11 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun secretGet(invoke: Invoke) {
         val args = invoke.parseArgs(NameArgs::class.java)
+        // "None" would make Rust start a new local database: refuse instead.
+        if (!Secrets.available(context)) {
+            invoke.reject("secret store locked")
+            return
+        }
         val result = JSObject()
         result.put("value", Secrets.get(context, args.name))
         invoke.resolve(result)
@@ -121,7 +126,12 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun secretDelete(invoke: Invoke) {
         val args = invoke.parseArgs(NameArgs::class.java)
-        Secrets.delete(context, args.name)
+        try {
+            Secrets.delete(context, args.name)
+        } catch (e: Exception) {
+            invoke.reject("secret store failed: ${e.javaClass.simpleName}")
+            return
+        }
         if (args.name == Secrets.DEVICE_SECRET) {
             // Unpaired: no more alarms on this device.
             synchronized(Store.LOCK) { Store.get(context).clearPlan() }

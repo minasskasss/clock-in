@@ -1,6 +1,8 @@
 package io.github.minasskasss.clockin.alarm
 
 import android.content.Context
+import android.content.SharedPreferences
+import android.os.UserManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -13,12 +15,16 @@ import javax.crypto.spec.GCMParameterSpec
 /**
  * The device secret and the local database key (ARCHITECTURE §5.7):
  * AES-256-GCM with a key that never leaves Android Keystore, ciphertext in
- * app-private, device-protected storage. Rust reads and writes them through
- * the plugin; the background code reads the device secret directly.
+ * app-private, **credential-encrypted** storage. Unlike the plan ([Store]),
+ * they are unreadable after a reboot until the phone is first unlocked; the
+ * pre-alarm check then has no secret and the alarm just rings (fail loud).
+ * Rust reads and writes them through the plugin; the background code reads
+ * the device secret directly.
  *
  * Nothing here logs or returns a secret in an error.
  */
 internal object Secrets {
+    private const val FILE = "clockin_secrets"
     private const val ALIAS = "io.github.minasskasss.clockin.secrets"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val IV_BYTES = 12
@@ -26,6 +32,18 @@ internal object Secrets {
 
     /** The name Rust stores the device secret under (src-tauri/src/state.rs). */
     const val DEVICE_SECRET = "device-secret"
+
+    /** False after a reboot until the phone is first unlocked. */
+    fun available(context: Context): Boolean =
+        context.applicationContext.getSystemService(UserManager::class.java)?.isUserUnlocked != false
+
+    /** Credential-encrypted storage, or null while it is still locked. */
+    private fun prefs(context: Context): SharedPreferences? =
+        if (available(context)) {
+            context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        } else {
+            null
+        }
 
     private fun key(): SecretKey {
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -41,18 +59,23 @@ internal object Secrets {
         return generator.generateKey()
     }
 
+    /** @throws IllegalStateException before the first unlock. */
     fun put(context: Context, name: String, value: String) {
         synchronized(Store.LOCK) {
+            val prefs = prefs(context) ?: throw IllegalStateException("locked")
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, key())
             val sealed = cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-            Store.get(context).setEncryptedSecret(name, Base64.encodeToString(sealed, Base64.NO_WRAP))
+            prefs.edit().putString(name, Base64.encodeToString(sealed, Base64.NO_WRAP)).commit()
         }
     }
 
-    /** The secret, or null if there is none or it can't be decrypted. */
+    /**
+     * The secret, or null if there is none, it can't be decrypted, or the
+     * phone hasn't been unlocked since it started.
+     */
     fun get(context: Context, name: String): String? {
-        val stored = Store.get(context).encryptedSecret(name) ?: return null
+        val stored = prefs(context)?.getString(name, null) ?: return null
         return try {
             val sealed = Base64.decode(stored, Base64.NO_WRAP)
             if (sealed.size <= IV_BYTES) return null
@@ -65,9 +88,11 @@ internal object Secrets {
         }
     }
 
+    /** @throws IllegalStateException before the first unlock. */
     fun delete(context: Context, name: String) {
         synchronized(Store.LOCK) {
-            Store.get(context).setEncryptedSecret(name, null)
+            val prefs = prefs(context) ?: throw IllegalStateException("locked")
+            prefs.edit().remove(name).commit()
         }
     }
 }

@@ -71,8 +71,9 @@ internal data class Active(
 
 /**
  * Everything the alarm code keeps, in device-protected storage so the
- * receivers also work after a reboot before the phone is first unlocked.
- * Secrets are stored here too, but only encrypted ([Secrets]).
+ * receivers also work after a reboot before the phone is first unlocked:
+ * alarm times, kinds and staff names, the alert mode, the public server
+ * config and small bookkeeping. Never the secrets ([Secrets]).
  */
 internal class Store private constructor(private val prefs: SharedPreferences) {
     companion object {
@@ -221,15 +222,5 @@ internal class Store private constructor(private val prefs: SharedPreferences) {
         val a = JSONArray()
         codes.forEach { a.put(it) }
         prefs.edit().putString("scheduled", a.toString()).commit()
-    }
-
-    // --- Secrets (already encrypted by [Secrets]) ---------------------------
-
-    fun encryptedSecret(name: String): String? = prefs.getString("secret.$name", null)
-
-    fun setEncryptedSecret(name: String, value: String?) {
-        val edit = prefs.edit()
-        if (value == null) edit.remove("secret.$name") else edit.putString("secret.$name", value)
-        edit.commit()
     }
 }

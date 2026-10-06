@@ -15,6 +15,7 @@ internal object Checker {
         if (items.isEmpty()) return items
         val store = Store.get(context)
         val api = store.serverApi() ?: return items
+        // No secret before the first unlock after a reboot: ring without asking.
         val secret = Secrets.get(context, Secrets.DEVICE_SECRET) ?: return items
         return when (val answer = api.checkAlarm(secret, items, TIMEOUT_MS)) {
             is ServerApi.Answer.Ok -> {
