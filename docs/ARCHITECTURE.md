@@ -272,6 +272,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 4. **Ring mode:**
    - a high-importance notification with a full-screen intent opens `AlarmActivity` (`showWhenLocked`, `turnScreenOn`), with names and a large **Stop**;
    - `MediaPlayer` loops with `AudioAttributes.USAGE_ALARM`;
+   - while it rings, the server check repeats every 25 s: names marked, moved or removed elsewhere drop off the screen and notification, and the ring ends when none are left; a failed check keeps every name (fail loud);
    - after 5 minutes: stop the sound, remove the service, and schedule an exact re-ring 5 minutes later; the re-ring repeats the server check and drops marked names;
    - **Stop** ends the cycle for this event on this device;
    - if `canUseFullScreenIntent()` is false, still post the high-priority notification with the looping sound, and show the permission banner.
