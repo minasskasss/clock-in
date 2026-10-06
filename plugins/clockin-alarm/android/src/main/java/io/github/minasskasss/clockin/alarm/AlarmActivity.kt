@@ -49,8 +49,8 @@ class AlarmActivity : Activity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val bg = Color.parseColor(if (dark) "#17120F" else "#F6EFE6")
-        val text = Color.parseColor(if (dark) "#F4EBE1" else "#2A211B")
-        val muted = Color.parseColor(if (dark) "#B9A999" else "#6E6056")
+        val textColor = Color.parseColor(if (dark) "#F4EBE1" else "#2A211B")
+        val mutedColor = Color.parseColor(if (dark) "#B9A999" else "#6E6056")
         val accent = Color.parseColor(if (dark) "#F08A5D" else "#C2552F")
         val accentText = Color.parseColor(if (dark) "#1C1410" else "#FFFAF4")
         window.decorView.setBackgroundColor(bg)
@@ -68,14 +68,14 @@ class AlarmActivity : Activity() {
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(24f), dp(48f), dp(24f), dp(32f))
         }
-        column.addView(label(20f, muted).apply { text = getString(R.string.clockin_alarm_title) })
-        time = label(64f, text, bold = true)
+        column.addView(label(20f, mutedColor).apply { text = getString(R.string.clockin_alarm_title) })
+        time = label(64f, textColor, bold = true)
         column.addView(time)
-        checkInTitle = label(18f, muted).apply { text = getString(R.string.clockin_alarm_checkIn); setPadding(0, dp(20f), 0, 0) }
-        checkInNames = label(30f, text, bold = true)
-        checkOutTitle = label(18f, muted).apply { text = getString(R.string.clockin_alarm_checkOut); setPadding(0, dp(20f), 0, 0) }
-        checkOutNames = label(30f, text, bold = true)
-        silent = label(17f, muted).apply { setPadding(0, dp(20f), 0, 0) }
+        checkInTitle = label(18f, mutedColor).apply { text = getString(R.string.clockin_alarm_checkIn); setPadding(0, dp(20f), 0, 0) }
+        checkInNames = label(30f, textColor, bold = true)
+        checkOutTitle = label(18f, mutedColor).apply { text = getString(R.string.clockin_alarm_checkOut); setPadding(0, dp(20f), 0, 0) }
+        checkOutNames = label(30f, textColor, bold = true)
+        silent = label(17f, mutedColor).apply { setPadding(0, dp(20f), 0, 0) }
         listOf(checkInTitle, checkInNames, checkOutTitle, checkOutNames, silent).forEach(column::addView)
 
         val stop = Button(this).apply {
@@ -97,7 +97,7 @@ class AlarmActivity : Activity() {
         column.addView(stop, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             topMargin = dp(36f)
         })
-        column.addView(label(15f, muted).apply {
+        column.addView(label(15f, mutedColor).apply {
             text = getString(R.string.clockin_alarm_note)
             setPadding(0, dp(20f), 0, 0)
         })

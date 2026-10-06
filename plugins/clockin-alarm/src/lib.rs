@@ -65,7 +65,11 @@ impl PermissionStatus {
     /// Everything the alarms need is granted (the maker step is advice).
     #[must_use]
     pub fn all_granted(&self) -> bool {
-        self.notifications && self.exact_alarms && self.full_screen && self.battery && self.unused_apps
+        self.notifications
+            && self.exact_alarms
+            && self.full_screen
+            && self.battery
+            && self.unused_apps
     }
 }
 

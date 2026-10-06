@@ -54,6 +54,11 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 /// through the Kotlin plugin, which answers on this, the main thread).
 #[cfg(target_os = "android")]
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    android_logger::init_once(
+        android_logger::Config::default()
+            .with_tag("ClockIn")
+            .with_max_level(log::LevelFilter::Info),
+    );
     let data_dir = app.path().app_local_data_dir()?;
     WebviewWindowBuilder::new(app, "main", WebviewUrl::default()).build()?;
     let handle = app.handle().clone();
@@ -61,7 +66,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .name("clock-in-start".into())
         .spawn(move || {
             if let Err(e) = android::start_app(&handle, &data_dir) {
-                eprintln!("clock-in: could not start: {e}");
+                log::error!("could not start: {e}");
             }
         })?;
     Ok(())

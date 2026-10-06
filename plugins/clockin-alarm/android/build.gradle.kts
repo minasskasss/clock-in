@@ -10,7 +10,7 @@ plugins {
 // res/values/strings.xml from the "alarm" and "android" sections of
 // src/i18n/el.json (CLAUDE.md: every user-facing string lives in el.json).
 val repoRoot = projectDir.resolve("../../..").canonicalFile
-val generatedRes = layout.buildDirectory.dir("generated/clockin-res")
+val generatedRes: File = layout.buildDirectory.dir("generated/clockin-res").get().asFile
 
 val generateClockinResources = tasks.register("generateClockinResources") {
     val elJson = repoRoot.resolve("src/i18n/el.json")
@@ -18,8 +18,8 @@ val generateClockinResources = tasks.register("generateClockinResources") {
     inputs.file(elJson)
     inputs.dir(sounds)
     outputs.dir(generatedRes)
+    val out = generatedRes
     doLast {
-        val out = generatedRes.get().asFile
         val raw = out.resolve("raw").apply { mkdirs() }
         sounds.resolve("check-in.wav").copyTo(raw.resolve("check_in.wav"), overwrite = true)
         sounds.resolve("check-out.wav").copyTo(raw.resolve("check_out.wav"), overwrite = true)

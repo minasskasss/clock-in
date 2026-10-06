@@ -70,6 +70,7 @@ pub async fn bridge<T: Send + 'static>(
 ///
 /// If the secret store or the local database can't be opened.
 pub fn start_app(app: &AppHandle, data_dir: &Path) -> Result<(), String> {
+    log::info!("starting in {}", data_dir.display());
     std::fs::create_dir_all(data_dir).map_err(|e| e.kind().to_string())?;
     let (state, secret) = AppState::open(
         Profile::default(),
@@ -78,6 +79,7 @@ pub fn start_app(app: &AppHandle, data_dir: &Path) -> Result<(), String> {
         crate::config::server_config(),
     )
     .map_err(|e| format!("{e:?}"))?;
+    log::info!("local database open");
     let state = Arc::new(state);
     if let Some(bridge) = app.try_state::<AlarmBridge<Wry>>() {
         if let Ok(name) = bridge.device_name() {
@@ -86,7 +88,7 @@ pub fn start_app(app: &AppHandle, data_dir: &Path) -> Result<(), String> {
         if let Some(config) = crate::config::server_config()
             && let Err(e) = bridge.set_server_config(config.base_url(), &config.publishable_key)
         {
-            eprintln!("clock-in: {e}");
+            log::error!("{e}");
         }
     }
     if let Some(secret) = secret
@@ -98,6 +100,7 @@ pub fn start_app(app: &AppHandle, data_dir: &Path) -> Result<(), String> {
     app.manage(Arc::clone(&state));
     app.manage(Arc::clone(&android));
     tauri::async_runtime::spawn(feed(app.clone(), state, android));
+    log::info!("started");
     Ok(())
 }
 
@@ -126,7 +129,7 @@ async fn feed(app: AppHandle, state: Arc<AppState>, android: Arc<Android>) {
                     sent = Some(key);
                     sent_at = Instant::now();
                 }
-                Some(Err(e)) => eprintln!("clock-in: {e}"),
+                Some(Err(e)) => log::error!("{e}"),
                 None => {}
             }
         }

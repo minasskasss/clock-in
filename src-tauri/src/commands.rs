@@ -71,7 +71,10 @@ pub struct DebugView {
 }
 
 #[tauri::command]
-#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::needless_pass_by_value))]
+#[cfg_attr(
+    not(target_os = "android"),
+    allow(unused_variables, clippy::needless_pass_by_value)
+)]
 pub fn app_state(app: tauri::AppHandle, state: AppS<'_>) -> Result<AppStateView, CmdError> {
     let phase = state.phase();
     let paired = phase == Phase::Paired;
@@ -128,7 +131,10 @@ fn android_view(_app: &tauri::AppHandle, _state: &AppState) -> Option<AndroidVie
 
 /// Ring or Notification, per device, no passphrase (SPEC §8.2).
 #[tauri::command]
-#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::needless_pass_by_value))]
+#[cfg_attr(
+    not(target_os = "android"),
+    allow(unused_variables, clippy::needless_pass_by_value)
+)]
 pub fn set_alert_mode(
     app: tauri::AppHandle,
     state: AppS<'_>,
@@ -148,7 +154,10 @@ pub fn set_alert_mode(
 /// Opens the Android screen that fixes one checklist item (`notifications`,
 /// `exactAlarms`, `fullScreen`, `battery`, `unusedApps`, `oem`).
 #[tauri::command]
-#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::unused_async))]
+#[cfg_attr(
+    not(target_os = "android"),
+    allow(unused_variables, clippy::unused_async)
+)]
 pub async fn android_open_settings(app: tauri::AppHandle, kind: String) -> Result<(), CmdError> {
     #[cfg(target_os = "android")]
     if let Some(Err(e)) = crate::android::bridge(&app, move |b| b.open_settings(&kind)).await {
@@ -159,7 +168,10 @@ pub async fn android_open_settings(app: tauri::AppHandle, kind: String) -> Resul
 
 /// The phone maker's extra step was done (it can't be checked automatically).
 #[tauri::command]
-#[cfg_attr(not(target_os = "android"), allow(unused_variables, clippy::unused_async))]
+#[cfg_attr(
+    not(target_os = "android"),
+    allow(unused_variables, clippy::unused_async)
+)]
 pub async fn android_set_oem_done(app: tauri::AppHandle, done: bool) -> Result<(), CmdError> {
     #[cfg(target_os = "android")]
     if let Some(Err(e)) = crate::android::bridge(&app, move |b| b.set_oem_done(done)).await {

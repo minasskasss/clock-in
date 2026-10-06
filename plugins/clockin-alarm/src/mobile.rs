@@ -56,9 +56,6 @@ struct DeviceName {
     name: String,
 }
 
-#[derive(Deserialize)]
-struct Nothing {}
-
 impl<R: Runtime> AlarmBridge<R> {
     pub(crate) fn new(handle: PluginHandle<R>) -> Self {
         Self(handle)
@@ -80,7 +77,7 @@ impl<R: Runtime> AlarmBridge<R> {
     ///
     /// If the Kotlin call fails.
     pub fn set_plan(&self, plan: &BridgePlan) -> Result<(), BridgeError> {
-        self.call::<Nothing>("setPlan", plan).map(drop)
+        self.call::<()>("setPlan", plan)
     }
 
     /// # Errors
@@ -96,14 +93,14 @@ impl<R: Runtime> AlarmBridge<R> {
     ///
     /// If the Kotlin call fails.
     pub fn open_settings(&self, kind: &str) -> Result<(), BridgeError> {
-        self.call::<Nothing>("openSettings", Kind { kind }).map(drop)
+        self.call::<()>("openSettings", Kind { kind })
     }
 
     /// # Errors
     ///
     /// If the Kotlin call fails.
     pub fn set_oem_done(&self, done: bool) -> Result<(), BridgeError> {
-        self.call::<Nothing>("setOemDone", Done { done }).map(drop)
+        self.call::<()>("setOemDone", Done { done })
     }
 
     /// # Errors
@@ -118,15 +115,14 @@ impl<R: Runtime> AlarmBridge<R> {
     ///
     /// If the Kotlin call fails.
     pub fn secret_set(&self, name: &str, value: &str) -> Result<(), BridgeError> {
-        self.call::<Nothing>("secretSet", Secret { name, value })
-            .map(drop)
+        self.call::<()>("secretSet", Secret { name, value })
     }
 
     /// # Errors
     ///
     /// If the Kotlin call fails.
     pub fn secret_delete(&self, name: &str) -> Result<(), BridgeError> {
-        self.call::<Nothing>("secretDelete", Name { name }).map(drop)
+        self.call::<()>("secretDelete", Name { name })
     }
 
     /// The project URL and publishable key the background code calls.
@@ -135,14 +131,13 @@ impl<R: Runtime> AlarmBridge<R> {
     ///
     /// If the Kotlin call fails.
     pub fn set_server_config(&self, url: &str, publishable_key: &str) -> Result<(), BridgeError> {
-        self.call::<Nothing>(
+        self.call::<()>(
             "setServerConfig",
             ServerConfig {
                 url,
                 publishable_key,
             },
         )
-        .map(drop)
     }
 
     /// The phone's own name (e.g. "Galaxy S24 Ultra").

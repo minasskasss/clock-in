@@ -72,6 +72,7 @@ C:\dev\clock-in\
   tools/generate-passphrase.ps1
   tools/android-env.ps1        Android build environment on Windows (JDK, SDK, NDK, MSYS2 Perl/make for OpenSSL)
   tools/build-apk.ps1          signed release APK, `-Env dev` (test phone) or `-Env prod` (employer)
+  tools/android-install-debug.ps1  development loop: arm64 debug build installed on the USB phone
   tools/build-icons.mjs        `pnpm icons`: every icon in src-tauri/icons from assets/icon (tauri icon + an .ico with the tuned layers)
   .env.example                 SUPABASE_URL=, SUPABASE_PUBLISHABLE_KEY=   (committed, empty values)
   .env.dev / .env.prod         real values (gitignored)

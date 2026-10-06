@@ -54,6 +54,11 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+# Start-up and alarm-feed messages in logcat (stderr goes nowhere on Android).
+log = "0.4"
+android_logger = "0.15"
+
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.5"
 

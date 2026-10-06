@@ -297,7 +297,11 @@ impl AppState {
     ///
     /// If the local database can't be written.
     pub fn set_alert_mode(&self, mode: AlertMode) -> Result<(), CmdError> {
-        lock(&self.ui_store).set_device_setting(SETTING_ALERT_MODE, mode.as_str(), Timestamp::now())?;
+        lock(&self.ui_store).set_device_setting(
+            SETTING_ALERT_MODE,
+            mode.as_str(),
+            Timestamp::now(),
+        )?;
         Ok(())
     }
 
