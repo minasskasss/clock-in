@@ -6,7 +6,7 @@ use crate::drafts::{hhmm, layout_flags};
 use clockin_core::{
     MarkKind, OverrideKind, RowStatus, Snapshot, business_date_for, shop_datetime, today_view,
 };
-use clockin_sync::{Platform, ServerSnapshot, SyncStatus};
+use clockin_sync::{Platform, RefusedMark, ServerSnapshot, SyncStatus};
 use jiff::Timestamp;
 use jiff::civil::Time;
 use serde::Serialize;
@@ -100,6 +100,25 @@ pub struct Banners {
     pub last_sync: Option<LocalStamp>,
     pub clock_skew: bool,
     pub horizon_short: bool,
+    /// Windows sound output muted, at zero or missing.
+    pub sound_off: bool,
+    /// Marks the server refused, oldest first; each stays until dismissed.
+    pub refused_marks: Vec<RefusedMarkView>,
+}
+
+/// A mark made on this device that the server refused, so it was not saved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefusedMarkView {
+    /// The mark's client id: what «Εντάξει» dismisses.
+    pub id: Uuid,
+    /// Empty if this device didn't know the person.
+    pub first_name: String,
+    pub last_name: String,
+    pub kind: MarkKind,
+    /// The mark's business date (ISO), only if it isn't the one shown on
+    /// Today.
+    pub other_date: Option<String>,
 }
 
 #[must_use]
@@ -111,7 +130,29 @@ pub fn banners(status: &SyncStatus, now: Timestamp) -> Banners {
         // Offline, a known horizon still counts; an unknown one is unknown.
         horizon_short: (status.online || status.plan_horizon_end.is_some())
             && clockin_core::horizon_short(status.plan_horizon_end, now),
+        sound_off: false,
+        refused_marks: Vec::new(),
     }
+}
+
+/// The notices for refused marks, against the business day shown on Today.
+#[must_use]
+pub fn refused_marks(
+    refused: &[RefusedMark],
+    now: Timestamp,
+    rollover: Time,
+) -> Vec<RefusedMarkView> {
+    let today = business_date_for(now, rollover);
+    refused
+        .iter()
+        .map(|r| RefusedMarkView {
+            id: r.client_id,
+            first_name: r.first_name.clone(),
+            last_name: r.last_name.clone(),
+            kind: r.kind,
+            other_date: (r.business_date != today).then(|| r.business_date.to_string()),
+        })
+        .collect()
 }
 
 // --- Settings -------------------------------------------------------------
@@ -586,5 +627,41 @@ mod tests {
         assert!(b.clock_skew && b.horizon_short && !b.offline);
         status.plan_horizon_end = Some(ts("2026-10-19T10:00:00Z"));
         assert!(!banners(&status, now()).horizon_short);
+    }
+
+    #[test]
+    fn refused_marks_name_the_person_and_a_date_other_than_today() {
+        let refused = |n: u128, day| RefusedMark {
+            client_id: id(n),
+            staff_id: id(1),
+            business_date: day,
+            kind: MarkKind::In,
+            first_name: "Babis".into(),
+            last_name: "Beta".into(),
+            refused_at: now(),
+        };
+        let views = refused_marks(
+            &[
+                refused(60, date(2026, 10, 5)),
+                refused(61, date(2026, 10, 24)),
+            ],
+            now(),
+            t(5, 0),
+        );
+        assert_eq!(views.len(), 2);
+        assert_eq!(views[0].id, id(60));
+        assert_eq!(views[0].other_date, None);
+        assert_eq!(views[1].other_date.as_deref(), Some("2026-10-24"));
+        let json = serde_json::to_value(&views[1]).unwrap();
+        assert_eq!(json["firstName"], "Babis");
+        assert_eq!(json["kind"], "in");
+        assert_eq!(json["otherDate"], "2026-10-24");
+        // At 01:00 on Tuesday, Monday's business day is still "today".
+        let views = refused_marks(
+            &[refused(62, date(2026, 10, 5))],
+            ts("2026-10-05T22:00:00Z"),
+            t(5, 0),
+        );
+        assert_eq!(views[0].other_date, None);
     }
 }

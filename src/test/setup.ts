@@ -6,6 +6,22 @@ import "../i18n";
 // No Tauri in tests: every command goes through a mock (see `mockCommands`).
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
+// Events from Rust (e.g. Tray → Quit): tests send them with `emitTauriEvent`.
+type EventHandler = (event: { payload: unknown }) => void;
+const tauriEvents = vi.hoisted(() => new Map<string, Set<EventHandler>>());
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async (name: string, handler: EventHandler) => {
+    const handlers = tauriEvents.get(name) ?? new Set<EventHandler>();
+    handlers.add(handler);
+    tauriEvents.set(name, handlers);
+    return () => handlers.delete(handler);
+  }),
+}));
+
+export function emitTauriEvent(name: string, payload: unknown = null): void {
+  tauriEvents.get(name)?.forEach((handler) => handler({ payload }));
+}
+
 /** jsdom has no matchMedia. Tests flip `systemPrefersDark` to simulate the OS setting. */
 export const mediaState = { systemPrefersDark: false };
 const listeners = new Set<() => void>();

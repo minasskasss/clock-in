@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./App.css";
 import { api } from "./api";
 import { Background } from "./components/Background";
 import { Brand } from "./components/Brand";
 import { FirstRun } from "./components/FirstRun";
+import { QuitDialog } from "./components/QuitDialog";
 import { QuickMenu } from "./components/QuickMenu";
 import { Today } from "./components/Today";
 import { Unlock } from "./components/Unlock";
@@ -12,12 +14,30 @@ import { Settings } from "./settings/Settings";
 import { useTheme } from "./theme/useTheme";
 import { useAppState } from "./useAppState";
 
+/** Sent by Rust when Quit is chosen in the tray (src-tauri/src/tray.rs). */
+export const QUIT_REQUESTED = "quit-requested";
+
 export default function App() {
   const { t } = useTranslation();
   const { state, failed, refresh } = useAppState();
   const [theme, setTheme] = useTheme(state?.autoDark ?? null);
   const [screen, setScreen] = useState<"today" | "settings">("today");
   const [unlocking, setUnlocking] = useState(false);
+  const [quitting, setQuitting] = useState(false);
+
+  // Tray → Quit (Rust shows this window first, then asks for the quit code).
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let alive = true;
+    listen(QUIT_REQUESTED, () => setQuitting(true)).then(
+      (stop) => (alive ? (unlisten = stop) : stop()),
+      () => {},
+    );
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
+  }, []);
 
   const paired = state?.phase === "paired";
   // Settings show only while unlocked: idle time or unpairing locks them.
@@ -93,6 +113,7 @@ export default function App() {
           onCancel={() => setUnlocking(false)}
         />
       )}
+      {quitting && <QuitDialog codeSet={state?.quitCodeSet ?? false} onCancel={() => setQuitting(false)} />}
     </>
   );
 }

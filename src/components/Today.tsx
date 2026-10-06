@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, type Banners as BannerState, type MarkKind, type Row, type RowStatus, type TodayView } from "../api";
+import {
+  api,
+  type Banners as BannerState,
+  type MarkKind,
+  type RefusedMark,
+  type Row,
+  type RowStatus,
+  type TodayView,
+} from "../api";
 import { errorMessage } from "../errors";
-import { formatLongDate, formatStamp } from "../dates";
+import { formatDate, formatLongDate, formatStamp } from "../dates";
 import { formatHours } from "../format";
 import { Dialog } from "./Dialog";
 import { FormMessage } from "./Field";
@@ -73,7 +81,7 @@ export function Today({ today, banners, onChanged }: TodayProps) {
         )}
       </div>
 
-      <Banners banners={banners} today={today?.businessDate ?? null} />
+      <Banners banners={banners} today={today?.businessDate ?? null} onChanged={onChanged} />
 
       {today === null ? (
         <p className="today__empty">{banners.offline ? t("today.noData") : t("today.syncing")}</p>
@@ -152,7 +160,43 @@ function RowItem({ row, onTap }: { row: Row; onTap: (kind: MarkKind) => void }) 
   );
 }
 
-function Banners({ banners, today }: { banners: BannerState; today: string | null }) {
+/** A mark the server refused: says so, by name, until «Εντάξει». */
+function RefusedNotice({ mark, onChanged }: { mark: RefusedMark; onChanged: () => void }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const name = `${mark.firstName} ${mark.lastName}`.trim() || t("banner.refusedUnknownName");
+  const kind = mark.kind === "in" ? t("marks.in") : t("marks.out");
+  const text = mark.otherDate
+    ? t("banner.refusedOnDate", { kind, name, date: formatDate(mark.otherDate) })
+    : t("banner.refused", { kind, name });
+  const dismiss = async () => {
+    setBusy(true);
+    try {
+      await api.dismissRefusedMark(mark.id);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="banner banner--refused" role="alert">
+      <p className="banner__text">{text}</p>
+      <button type="button" className="button" onClick={() => void dismiss()} disabled={busy}>
+        {t("common.ok")}
+      </button>
+    </div>
+  );
+}
+
+function Banners({
+  banners,
+  today,
+  onChanged,
+}: {
+  banners: BannerState;
+  today: string | null;
+  onChanged: () => void;
+}) {
   const { t } = useTranslation();
   const items: { key: string; text: string }[] = [];
   if (banners.offline) {
@@ -163,11 +207,15 @@ function Banners({ banners, today }: { banners: BannerState; today: string | nul
         : t("banner.offlineNever"),
     });
   }
+  if (banners.soundOff) items.push({ key: "sound", text: t("banner.soundOff") });
   if (banners.clockSkew) items.push({ key: "skew", text: t("banner.clockSkew") });
   if (banners.horizonShort) items.push({ key: "horizon", text: t("banner.horizonShort") });
-  if (items.length === 0) return null;
+  if (items.length === 0 && banners.refusedMarks.length === 0) return null;
   return (
     <div className="banners">
+      {banners.refusedMarks.map((mark) => (
+        <RefusedNotice key={mark.id} mark={mark} onChanged={onChanged} />
+      ))}
       {items.map((item) => (
         <p key={item.key} className={`banner banner--${item.key}`} role="status">
           {item.text}

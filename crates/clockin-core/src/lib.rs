@@ -11,6 +11,7 @@
 //! - [`alarm_plan`]: every alarm in a window, with deterministic ids.
 //! - [`due_events`] / [`next_event`]: alarms grouped by minute, suppressed by marks.
 //! - [`ring_cycle_state`]: the ring 5 min / silent 5 min repeat cycle.
+//! - [`AlarmScheduler`]: what the Windows alarm should do right now.
 //! - [`validate_week`] / [`validate_override`]: durations and overlaps.
 //! - [`auto_theme_is_dark`]: the automatic light/dark theme.
 
@@ -22,6 +23,7 @@ mod occurrence;
 mod passphrase;
 mod plan;
 mod ring;
+mod scheduler;
 mod shop_time;
 mod sync;
 mod theme;
@@ -34,8 +36,8 @@ mod proptests;
 mod test_support;
 
 pub use admin::{
-    ADMIN_IDLE_TIMEOUT, admin_idle_expired, clock_offset_to, lockout_until, offset_now,
-    seconds_until,
+    ADMIN_IDLE_TIMEOUT, admin_idle_expired, clock_offset_to, in_second_pass, lockout_until,
+    offset_now, seconds_until,
 };
 pub use business_day::{BlockLayout, business_date_for, business_day_start};
 pub use events::{
@@ -53,6 +55,7 @@ pub use passphrase::{
 };
 pub use plan::{MISSED_ALARM_GRACE, PLAN_HORIZON, PlanItem, alarm_plan, item_id, plan_window};
 pub use ring::{RING_DURATION, RingPhase, SILENT_DURATION, ring_cycle_state};
+pub use scheduler::{AlarmKey, AlarmScheduler, AlarmState, MAX_SLEEP, RingingAlarm};
 pub use shop_time::{
     TIME_ZONE_NAME, floor_to_minute, resolve_local, resolve_local_at, shop_clock, shop_datetime,
     shop_time_zone,

@@ -35,6 +35,12 @@ fn pixels(base: f64, scale: f64) -> i32 {
     px.max(1)
 }
 
+/// The small-icon size (title bar, tray) in pixels at this scale factor.
+#[must_use]
+pub fn small_px(scale: f64) -> i32 {
+    pixels(SMALL_PX, scale)
+}
+
 /// The app icon from the .exe, at exactly `size` Ã— `size` pixels (Windows
 /// picks the matching layer, or scales the nearest larger one), or `None`.
 #[allow(unsafe_code)]

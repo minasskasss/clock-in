@@ -24,4 +24,4 @@ pub use engine::{
     SyncBackend, SyncEngine, SyncStatus, TickReport, core_snapshot_with_pending, queue_mark,
 };
 pub use secret::{DeviceSecret, QuitCode, SessionToken};
-pub use store::{CachedSnapshot, Store, StoreError, StoreKey};
+pub use store::{CachedSnapshot, RefusedMark, Store, StoreError, StoreKey};

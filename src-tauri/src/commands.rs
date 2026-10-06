@@ -1,6 +1,7 @@
 //! The commands the UI calls (`invoke`). They stay thin: rules live in
 //! `clockin-core`, the server calls in `clockin-sync`, state in [`AppState`].
 
+use crate::alarms::{AlarmView, Alarms};
 use crate::drafts::{
     self, OverrideReport, RangeDraft, WeekBlockDraft, WeekReport, check_override, check_week,
     parse_date, parse_hhmm,
@@ -39,6 +40,8 @@ pub struct AppStateView {
     data_version: i64,
     /// Whether the automatic theme is dark right now (SPEC §3).
     auto_dark: bool,
+    /// Whether Quit asks for a quit code (false before one is known).
+    quit_code_set: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,6 +50,8 @@ pub struct DebugView {
     profile: Option<String>,
     /// Greek wall clock "YYYY-MM-DDTHH:MM" while the fake clock is on.
     fake_clock: Option<String>,
+    /// The fake time is in the second pass of the repeated hour.
+    fake_clock_second: bool,
 }
 
 #[tauri::command]
@@ -59,6 +64,7 @@ pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
         debug: cfg!(debug_assertions).then(|| DebugView {
             profile: state.profile().name().map(str::to_owned),
             fake_clock: state.clock.fake(),
+            fake_clock_second: state.clock.fake_second_pass(),
         }),
         lockout_remaining_s: state.lockout_remaining_s(),
         default_device_name: state.profile().default_device_name(),
@@ -71,6 +77,7 @@ pub fn app_state(state: AppS<'_>) -> Result<AppStateView, CmdError> {
         admin_unlocked: paired && state.admin_unlocked(),
         data_version: state.data_version(),
         auto_dark: clockin_core::auto_theme_is_dark(state.clock.now(), state.rollover()),
+        quit_code_set: state.quit_code_set(),
     })
 }
 
@@ -122,6 +129,12 @@ pub fn mark(
 ) -> Result<(), CmdError> {
     let date = parse_date(&business_date).ok_or(CmdError::invalid("business_date", "format"))?;
     state.mark(staff_id, source_block_id, date, kind)
+}
+
+/// «Εντάξει» on the notice for a mark the server refused.
+#[tauri::command]
+pub fn dismiss_refused_mark(state: AppS<'_>, id: Uuid) -> Result<(), CmdError> {
+    state.dismiss_refused_mark(id)
 }
 
 // --- Admin session --------------------------------------------------------------
@@ -379,12 +392,56 @@ pub fn generate_passphrase(state: AppS<'_>) -> Result<String, CmdError> {
     passgen::generate().map_err(CmdError::internal)
 }
 
+// --- Alarms and quitting (Windows) ------------------------------------------------
+
+/// What the alarm window polls.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlarmStateView {
+    /// `None` once the alarm ended (the window is about to close).
+    alarm: Option<AlarmView>,
+    auto_dark: bool,
+}
+
+#[tauri::command]
+pub fn alarm_state(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>) -> AlarmStateView {
+    AlarmStateView {
+        alarm: alarms.view(),
+        auto_dark: clockin_core::auto_theme_is_dark(state.clock.now(), state.rollover()),
+    }
+}
+
+/// Stop on the alarm window: ends alarm `id` on this device only. It marks
+/// nobody (SPEC §7.3).
+#[tauri::command]
+pub fn alarm_stop(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>, id: u64) {
+    alarms.stop(&state, id);
+}
+
+/// Tray → Quit (SPEC §8.1): exits only with the right quit code, checked on
+/// this device (works offline). No lockout: the code only prevents closing
+/// by accident.
+#[tauri::command]
+pub fn quit(app: tauri::AppHandle, state: AppS<'_>, code: String) -> Result<(), CmdError> {
+    if state.quit_allowed(&code) {
+        app.exit(0);
+        Ok(())
+    } else {
+        Err(CmdError::invalid("quit_code", "wrong"))
+    }
+}
+
 // --- Debug ----------------------------------------------------------------------
 
 /// Debug builds: sets the fake clock to a Greek wall-clock time
-/// ("YYYY-MM-DDTHH:MM"), or back to real time with `null`.
+/// ("YYYY-MM-DDTHH:MM"), or back to real time with `null`. `second`: the
+/// second pass of the hour that repeats when the clocks go back.
 #[tauri::command]
-pub fn debug_set_clock(state: AppS<'_>, local: Option<String>) -> Result<(), CmdError> {
+pub fn debug_set_clock(
+    state: AppS<'_>,
+    local: Option<String>,
+    second: Option<bool>,
+) -> Result<(), CmdError> {
     let target = match local {
         None => None,
         // ISO "2026-10-05T21:00"; the UI reads the typed dd/mm/yyyy HH:MM.
@@ -393,7 +450,7 @@ pub fn debug_set_clock(state: AppS<'_>, local: Option<String>) -> Result<(), Cmd
                 .map_err(|_| CmdError::invalid("fake_clock", "format"))?,
         ),
     };
-    if state.set_fake_clock(target) {
+    if state.set_fake_clock(target, second.unwrap_or(false)) {
         Ok(())
     } else {
         Err(CmdError::invalid("fake_clock", "unavailable"))

@@ -21,7 +21,7 @@ tauri-build.workspace = true
 clockin-core.workspace = true
 clockin-sync.workspace = true
 tauri-plugin-clockin-alarm.workspace = true
-tauri.workspace = true
+tauri = { workspace = true, features = ["tray-icon"] }
 serde.workspace = true
 serde_json.workspace = true
 jiff.workspace = true
@@ -30,15 +30,32 @@ tokio = { version = "1", features = ["sync", "time", "macros"] }
 getrandom = "0.3.4"
 thiserror = "2.0.21"
 
-# Windows Credential Manager for the device secret and the local database key.
 [target.'cfg(windows)'.dependencies]
+# Windows Credential Manager for the device secret and the local database key.
 keyring-core = "1.0.0"
 windows-native-keyring-store = { version = "1.1.0", default-features = false }
-# Title-bar and taskbar icons at their exact sizes (src/window_icon.rs).
+# Alarm sounds (src/audio.rs).
+rodio = { version = "0.22", default-features = false, features = ["playback"] }
+# Core Audio mute/volume check for the banner (src/volume.rs).
+windows = { version = "0.62", features = [
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+] }
+# Window and tray icons at exact sizes (src/window_icon.rs), keep-awake
+# (src/power.rs) and the start-with-Windows entry (src/autostart.rs).
 windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
     "Win32_System_LibraryLoader",
+    "Win32_System_Power",
+    "Win32_System_Registry",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2.5"
 
 [lints]
 workspace = true

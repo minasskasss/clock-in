@@ -96,7 +96,7 @@ describe("App", () => {
 
   it("shows the fake clock only in debug builds", async () => {
     const calls = mockCommands({
-      app_state: appState({ debug: { profile: "b", fakeClock: "2026-10-25T03:30" } }),
+      app_state: appState({ debug: { profile: "b", fakeClock: "2026-10-25T03:30", fakeClockSecond: false } }),
       debug_set_clock: null,
     });
     const user = userEvent.setup();
@@ -115,9 +115,28 @@ describe("App", () => {
     await user.clear(box);
     await user.type(box, "05/10/2026 21:00");
     await user.click(screen.getByRole("button", { name: "Ορισμός" }));
-    expect(callsTo(calls, "debug_set_clock")).toEqual([{ local: "2026-10-05T21:00" }]);
+    expect(callsTo(calls, "debug_set_clock")).toEqual([{ local: "2026-10-05T21:00", second: false }]);
     await user.click(screen.getByRole("button", { name: "Πραγματική ώρα" }));
     expect(calls.some((c) => c.command === "debug_set_clock" && c.args?.local === null)).toBe(true);
+  });
+
+  it("sets the fake clock to the second pass of the repeated hour", async () => {
+    const calls = mockCommands({
+      app_state: appState({ debug: { profile: null, fakeClock: "2026-10-25T03:20", fakeClockSecond: true } }),
+      debug_set_clock: null,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("11:42");
+    await user.click(screen.getByRole("button", { name: "Μενού" }));
+    expect(screen.getByText("Ενεργό: 25/10/2026 03:20 (δεύτερη φορά, χειμερινή ώρα)")).toBeInTheDocument();
+    const second = screen.getByRole("checkbox", { name: /δεύτερη φορά της ώρας/ });
+    expect(second).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Ορισμός" }));
+    expect(callsTo(calls, "debug_set_clock")).toEqual([{ local: "2026-10-25T03:20", second: true }]);
+    await user.click(second);
+    await user.click(screen.getByRole("button", { name: "Ορισμός" }));
+    expect(callsTo(calls, "debug_set_clock")[1]).toEqual({ local: "2026-10-25T03:20", second: false });
   });
 
   it("tells the user when the app core doesn't answer", async () => {
