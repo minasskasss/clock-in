@@ -125,6 +125,8 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "ndk;30.0.16248370"
           echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+          # OpenSSL's install step runs ranlib; the Tauri CLI sets only CC and AR.
+          echo "RANLIB_aarch64_linux_android=$ANDROID_HOME/ndk/30.0.16248370/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -141,7 +143,6 @@ jobs:
           BIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           export CC_aarch64_linux_android="$BIN/aarch64-linux-android26-clang"
           export AR_aarch64_linux_android="$BIN/llvm-ar"
-          export RANLIB_aarch64_linux_android="$BIN/llvm-ranlib"
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$BIN/aarch64-linux-android26-clang"
           cargo clippy -p clock-in -p tauri-plugin-clockin-alarm --target aarch64-linux-android --all-targets -- -D warnings
 
