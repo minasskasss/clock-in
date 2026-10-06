@@ -139,9 +139,17 @@ internal object Notifications {
         notify(context, ID_SILENT, notification)
     }
 
-    /** Notification mode (SPEC §7.4): one notification, standard sound, opens the app. */
+    /**
+     * Notification mode (SPEC §7.4): one notification, standard sound, opens
+     * the app. While Do Not Disturb is on it makes no sound, whatever the DND
+     * exceptions say (ring mode still rings through DND as an alarm).
+     */
     fun showReminder(context: Context, items: List<PlanItem>, minute: Long) {
         val text = nameLines(context, items)
+        val dnd = context.getSystemService(NotificationManager::class.java)
+            ?.currentInterruptionFilter
+            ?.let { it != NotificationManager.INTERRUPTION_FILTER_ALL && it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN }
+            ?: false
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
             .setSmallIcon(R.drawable.clockin_notification)
             .setContentTitle(context.getString(R.string.clockin_alarm_title))
@@ -150,6 +158,7 @@ internal object Notifications {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setSilent(dnd)
             .setAutoCancel(true)
             .setContentIntent(openAppIntent(context))
             .build()
