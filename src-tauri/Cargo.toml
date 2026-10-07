@@ -45,7 +45,8 @@ windows = { version = "0.62", features = [
     "Win32_System_Variant",
 ] }
 # Window and tray icons at exact sizes (src/window_icon.rs), keep-awake
-# (src/power.rs) and the start-with-Windows entry (src/autostart.rs).
+# (src/power.rs), the start-with-Windows entry (src/autostart.rs) and the
+# dead-key guard (src/keyboard_guard.rs).
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
@@ -59,6 +60,10 @@ windows-sys = { version = "0.61", features = [
 # Start-up and alarm-feed messages in logcat (stderr goes nowhere on Android).
 log = "0.4"
 android_logger = "0.15"
+
+[target.'cfg(windows)'.dev-dependencies]
+# Tests only: reads the Greek keyboard layout (src/keyboard_guard.rs).
+windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.5"

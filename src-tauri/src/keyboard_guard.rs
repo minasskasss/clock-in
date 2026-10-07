@@ -3,11 +3,13 @@
 //! tao 0.37.1 (and winit, whose keyboard code it copies) panics on a
 //! `WM_DEADCHAR` that its window did not see the key-down for
 //! (`keyboard.rs`: `event_info.take().unwrap()`), which ends the whole app.
-//! Greek keyboards have such a key: the tonos (΄) waits for the next letter.
+//! A dead key waits for the next letter; the Greek keyboard has three: the
+//! tonos ΄, the dialytika ¨ and the dialytika with tonos ΅.
 //! The app's own windows never need these messages: typing happens in the
 //! WebView's own child window, which this does not touch. So each window gets
-//! a subclass that drops `WM_DEADCHAR` and `WM_SYSDEADCHAR` before tao sees
-//! them; tao already ignores the character that may follow.
+//! a subclass that drops every `WM_DEADCHAR` and `WM_SYSDEADCHAR`, whatever
+//! the key or keyboard layout, before tao sees them; tao already ignores the
+//! character that may follow.
 
 use std::ffi::c_void;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -55,15 +57,29 @@ unsafe extern "system" fn guard(
 #[allow(unsafe_code)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
+    use std::cell::RefCell;
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+        GetKeyboardLayoutList, HKL, KLF_NOTELLSHELL, LoadKeyboardLayoutW, MAPVK_VK_TO_VSC,
+        MapVirtualKeyExW, ToUnicodeEx, UnloadKeyboardLayout, VK_CONTROL, VK_MENU, VK_OEM_1,
+        VK_SHIFT, VK_W,
+    };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, HWND_MESSAGE, RegisterClassW, SendMessageW,
         WM_CHAR, WM_KEYDOWN, WNDCLASSW,
     };
 
-    /// The messages the window procedure under the guard received.
-    static SEEN: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+    /// The Greek keyboard's dead keys, with a letter each one accents.
+    const GREEK_DEAD_KEYS: [(char, char); 3] = [('΄', 'ά'), ('¨', 'ϊ'), ('΅', 'ΐ')];
+
+    thread_local! {
+        /// The key messages the window procedure under the guard received.
+        static SEEN: RefCell<Vec<(u32, usize)>> = const { RefCell::new(Vec::new()) };
+    }
+
+    fn seen() -> Vec<(u32, usize)> {
+        SEEN.with_borrow_mut(std::mem::take)
+    }
 
     unsafe extern "system" fn record(
         hwnd: HWND,
@@ -72,16 +88,18 @@ mod tests {
         lparam: LPARAM,
     ) -> LRESULT {
         if matches!(msg, WM_KEYDOWN | WM_CHAR | WM_DEADCHAR | WM_SYSDEADCHAR) {
-            SEEN.lock().unwrap().push(msg);
+            SEEN.with_borrow_mut(|seen| seen.push((msg, wparam)));
         }
         // SAFETY: default handling for everything else.
         unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
     }
 
-    #[test]
-    fn dead_keys_never_reach_the_window_and_other_keys_do() {
+    /// A message-only window of this thread that records key messages, with
+    /// the guard installed.
+    fn guarded_window() -> HWND {
         let class: Vec<u16> = "ClockInKeyboardGuardTest\0".encode_utf16().collect();
-        // SAFETY: a message-only window on this thread, destroyed below.
+        // SAFETY: registers a class (again is harmless) and creates a
+        // message-only window on this thread; the tests destroy it.
         let hwnd = unsafe {
             let instance = GetModuleHandleW(std::ptr::null());
             let wc = WNDCLASSW {
@@ -109,12 +127,104 @@ mod tests {
         assert!(!hwnd.is_null());
         assert!(install(hwnd));
         assert!(install(hwnd), "installing again is harmless");
-        for msg in [WM_KEYDOWN, WM_DEADCHAR, WM_SYSDEADCHAR, WM_CHAR] {
-            // SAFETY: synchronous send to our own window.
-            unsafe { SendMessageW(hwnd, msg, 0x0384, 0x0027_0001) };
-        }
-        assert_eq!(*SEEN.lock().unwrap(), [WM_KEYDOWN, WM_CHAR]);
+        hwnd
+    }
+
+    fn send(hwnd: HWND, msg: u32, wparam: usize) {
+        // SAFETY: synchronous send to our own window.
+        unsafe { SendMessageW(hwnd, msg, wparam, 0x0027_0001) };
+    }
+
+    fn destroy(hwnd: HWND) {
         // SAFETY: our window; the guard removes itself on WM_NCDESTROY.
         assert_ne!(unsafe { DestroyWindow(hwnd) }, 0);
+    }
+
+    #[test]
+    fn every_greek_dead_key_is_dropped_and_the_accented_letter_arrives() {
+        let hwnd = guarded_window();
+        for (dead, letter) in GREEK_DEAD_KEYS {
+            // With Alt held, Windows sends the "system" variant.
+            for dead_msg in [WM_DEADCHAR, WM_SYSDEADCHAR] {
+                send(hwnd, WM_KEYDOWN, VK_OEM_1.into());
+                send(hwnd, dead_msg, dead as usize);
+                send(hwnd, WM_KEYDOWN, 0x41);
+                send(hwnd, WM_CHAR, letter as usize);
+                assert_eq!(
+                    seen(),
+                    [
+                        (WM_KEYDOWN, VK_OEM_1.into()),
+                        (WM_KEYDOWN, 0x41),
+                        (WM_CHAR, letter as usize),
+                    ],
+                    "{dead} {dead_msg:#x}"
+                );
+            }
+        }
+        destroy(hwnd);
+    }
+
+    /// Reads the Windows "Greek" keyboard layout (loaded only for this test if
+    /// it isn't already) to check that the dead keys above are all of them.
+    #[test]
+    fn the_greek_keyboard_has_no_other_dead_keys() {
+        const GREEK: usize = 0x0408_0408;
+        // SAFETY: fills a buffer of the size Windows asked for.
+        let loaded = unsafe {
+            let mut list =
+                vec![std::ptr::null_mut(); GetKeyboardLayoutList(0, std::ptr::null_mut()) as usize];
+            let n = GetKeyboardLayoutList(list.len() as i32, list.as_mut_ptr());
+            list.truncate(n.max(0) as usize);
+            list.iter().any(|&hkl: &HKL| hkl as usize == GREEK)
+        };
+        let id: Vec<u16> = "00000408\0".encode_utf16().collect();
+        // SAFETY: loads the layout without making it active or telling the shell.
+        let hkl = unsafe { LoadKeyboardLayoutW(id.as_ptr(), KLF_NOTELLSHELL) };
+        assert_eq!(hkl as usize, GREEK);
+
+        let mut dead = Vec::new();
+        for (name, modifiers) in [
+            ("", &[][..]),
+            ("Shift+", &[VK_SHIFT][..]),
+            ("AltGr+", &[VK_CONTROL, VK_MENU][..]),
+            ("Shift+AltGr+", &[VK_SHIFT, VK_CONTROL, VK_MENU][..]),
+        ] {
+            let mut keys = [0u8; 256];
+            for &m in modifiers {
+                keys[usize::from(m)] = 0x80;
+            }
+            for vk in 1..255 {
+                let mut out = [0u16; 8];
+                // SAFETY: valid buffers; flag 4 leaves the keyboard state alone.
+                let n = unsafe {
+                    let scan = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, hkl);
+                    ToUnicodeEx(vk, scan, keys.as_ptr(), out.as_mut_ptr(), 8, 4, hkl)
+                };
+                if n < 0 {
+                    dead.push((
+                        format!("{name}{vk:#x}"),
+                        char::from_u32(out[0].into()).unwrap(),
+                    ));
+                }
+            }
+        }
+        if !loaded {
+            // SAFETY: unloads only what this test loaded.
+            unsafe { UnloadKeyboardLayout(hkl) };
+        }
+
+        let key = |vk: u16| format!("{vk:#x}");
+        assert_eq!(
+            dead,
+            [
+                (key(VK_OEM_1), '΄'),
+                (format!("Shift+{}", key(VK_W)), '΅'),
+                (format!("Shift+{}", key(VK_OEM_1)), '¨'),
+                (format!("AltGr+{}", key(VK_OEM_1)), '΅'),
+            ]
+        );
+        for (_, c) in dead {
+            assert!(GREEK_DEAD_KEYS.iter().any(|&(d, _)| d == c), "{c}");
+        }
     }
 }
