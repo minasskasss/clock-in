@@ -235,9 +235,11 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 **Commands exposed to Rust** (Rust calls them off the main thread; see DECISIONS, Phase 5):
 
-- `setPlan(items, alertMode, configVersion, horizonEnd)`: Rust sends its own 14-day plan without the alarms that marks known on the phone suppress
+- `setPlan(items, alertMode, configVersion, horizonEnd, theme, darkWindows)`: Rust sends its own 14-day plan without the alarms that marks known on the phone suppress, plus the alarm screen's theme and the automatic theme's dark periods (`clockin-core::auto_dark_windows`)
 - `permissionStatus()`
-- `openSettings(kind)` (notifications, exact alarms, full-screen, battery exemption, "pause if unused", the maker step)
+- `alarmStatus()` (the cycle in progress, for the «Σταμάτημα» bar on Today) and `stopAlarm()`
+- `diagnostics()` (the «Διαγνωστικά» view: phone, background refresh, next and last alarm)
+- `openSettings(kind)` (notifications, exact alarms, full-screen, battery exemption, "pause if unused", the maker step, and Xiaomi's autostart, other-permissions and battery-saver screens)
 - `setOemDone(done)`
 - `secretGet/Set/Delete(name, value)`
 - `setServerConfig(url, publishableKey)`
@@ -270,7 +272,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 2. Call `check_alarm(item_ids)` with a 3 s timeout.
 3. If nothing is due, stop silently. If `config_version` is newer than the stored plan's, enqueue a one-time plan refresh first.
 4. **Ring mode:**
-   - a high-importance notification with a full-screen intent opens `AlarmActivity` (`showWhenLocked`, `turnScreenOn`), with names and a large **Stop**;
+   - a high-importance notification with a full-screen intent opens `AlarmActivity` (`showWhenLocked`, `turnScreenOn`), with names and a large **Stop**, in the app's theme. The notification must not be "silent" (`setSilent`): SystemUI refuses full-screen intents for silent notifications and for suppressed group alerts (DECISIONS 2026-10-07). If it is swiped away (Android 14+), its delete intent posts it again while the cycle lasts; Today also shows a **Σταμάτημα** bar;
    - `MediaPlayer` loops with `AudioAttributes.USAGE_ALARM`;
    - while it rings, the server check repeats every 25 s: names marked, moved or removed elsewhere drop off the screen and notification, and the ring ends when none are left; a failed check keeps every name (fail loud);
    - after 5 minutes: stop the sound, remove the service, and schedule an exact re-ring 5 minutes later; the re-ring repeats the server check and drops marked names;
@@ -292,7 +294,8 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 - exact alarms;
 - full-screen intent;
 - battery-optimisation exemption (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`);
-- an OEM note with deep links for Xiaomi, Samsung, Huawei and Oppo autostart/background settings where they exist (see dontkillmyapp.com).
+- an OEM note with deep links for Xiaomi, Samsung, Huawei and Oppo autostart/background settings where they exist (see dontkillmyapp.com); Xiaomi gets four steps (autostart, other permissions, battery saver, lock in Recents).
+- After an update (`MY_PACKAGE_REPLACED`), a notification if a required permission is off: Android 14+ installers may switch full-screen intents off on every update.
 
 **HTTP client:** a minimal HTTPS POST to the RPC endpoint from Kotlin, using the stored publishable key and device secret.
 

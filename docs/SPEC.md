@@ -191,7 +191,10 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
 ### 8.2 Android (employer's phone)
 
 - **Per-device settings, no passphrase needed:** alert mode (**Ring** / **Notification**, default Ring) and theme (the same four options as §3, default **Αυτόματο**; **Σύστημα** follows Android's dark-theme setting). The app is Greek only, so there is no language setting.
-- **First-run onboarding** walks through each required permission and the battery-optimisation exemption. It shows a live checklist (✓ / ✗) that is also available later in the menu. The wording must be clear enough for a non-technical person following instructions over the phone.
+- **First-run onboarding** walks through each required permission and the battery-optimisation exemption. It shows a live checklist (✓ / ✗) that is also available later in the menu. The wording must be clear enough for a non-technical person following instructions over the phone. Phone makers with their own background limits get their own steps (e.g. Xiaomi: autostart, pop-ups in the background, show on lock screen, battery saver, lock in Recents). If an update switches a required permission off, the phone says so at once with a notification, and the checklist and Today banner show it.
+- **Stop from the app:** while a Ring-mode alarm is ringing (or silent between rings) on the phone, Today shows a large **Σταμάτημα** bar with the names, so the alarm can be stopped even if its notification was dismissed. Like Stop on the alarm screen, it marks nobody.
+- **Alarm screen theme:** the full-screen alarm follows the app's theme choice on that phone, with the same «Αυτόματο» rule as the rest of the app.
+- **«Διαγνωστικά»** (menu, no passphrase): a read-only page in plain Greek for checking a phone remotely in one screenshot: each permission's state, the phone model and Android / maker-system version, the last background refresh and whether it succeeded, the next scheduled alarm, the last alarm that rang and whether it showed full-screen or only as a notification, and the alert mode. No secrets.
 - **Distribution:** a signed APK (not Google Play). New versions install over the old one and keep data and pairing.
 
 ## 9. Data retention and privacy
