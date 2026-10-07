@@ -15,6 +15,8 @@ mod drafts;
 mod e2e;
 mod error;
 mod i18n;
+#[cfg(windows)]
+mod keyboard_guard;
 mod passgen;
 #[cfg(windows)]
 mod power;
@@ -76,7 +78,11 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
     let window = window.build()?;
     #[cfg(windows)]
-    window_icon::apply(window.hwnd()?.0, window.scale_factor()?);
+    {
+        window_icon::apply(window.hwnd()?.0, window.scale_factor()?);
+        // `setup` runs on the main thread, which owns the window.
+        keyboard_guard::install(window.hwnd()?.0);
+    }
 
     let alarms = Arc::new(Alarms::new(&state, webview_dir));
     app.manage(Arc::clone(&alarms));

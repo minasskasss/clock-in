@@ -158,8 +158,18 @@ impl Alarms {
         match builder.build() {
             Ok(window) => {
                 #[cfg(windows)]
-                if let (Ok(hwnd), Ok(scale)) = (window.hwnd(), window.scale_factor()) {
-                    crate::window_icon::apply(hwnd.0, scale);
+                {
+                    if let (Ok(hwnd), Ok(scale)) = (window.hwnd(), window.scale_factor()) {
+                        crate::window_icon::apply(hwnd.0, scale);
+                    }
+                    // The scheduler runs on another thread; a subclass must be
+                    // installed by the thread that owns the window.
+                    let guarded = window.clone();
+                    let _ = window.run_on_main_thread(move || {
+                        if let Ok(hwnd) = guarded.hwnd() {
+                            crate::keyboard_guard::install(hwnd.0);
+                        }
+                    });
                 }
                 Some(window)
             }

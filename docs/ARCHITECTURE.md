@@ -221,6 +221,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
   - closing the main window hides it;
   - **Quit** shows a 4-digit keypad and compares against the cached `quit_code`. It works offline.
   - autostart: the app writes `"<exe>" --autostart` to the current user's `Run` key (quoted path; `tauri-plugin-autostart` writes it unquoted) and starts hidden in the tray; single instance via `tauri-plugin-single-instance`.
+- **Dead-key guard:** every app window is subclassed to drop `WM_DEADCHAR` / `WM_SYSDEADCHAR` before tao, which panics on one it did not see the key-down for (DECISIONS 2026-10-07).
 - **Keep-awake:** `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)` while running.
 - **Mute detection:** Core Audio `IAudioEndpointVolume` (`GetMute`, master volume = 0), polled every 30 s, drives the banner.
 - **Debug builds only:**
