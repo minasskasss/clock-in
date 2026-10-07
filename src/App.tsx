@@ -5,6 +5,7 @@ import "./App.css";
 import { api } from "./api";
 import { Background } from "./components/Background";
 import { Brand } from "./components/Brand";
+import { Diagnostics } from "./components/Diagnostics";
 import { FirstRun } from "./components/FirstRun";
 import { Onboarding } from "./components/Onboarding";
 import { QuitDialog } from "./components/QuitDialog";
@@ -27,6 +28,8 @@ export default function App() {
   const { state, failed, refresh } = useAppState();
   const [theme, setTheme] = useTheme(state?.autoDark ?? null);
   const [screen, setScreen] = useState<"today" | "settings">("today");
+  // Android: «Διαγνωστικά» from the menu, over any screen.
+  const [diagnostics, setDiagnostics] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [quitting, setQuitting] = useState(false);
   // Android: the checklist opens by itself after pairing, until finished or
@@ -75,7 +78,9 @@ export default function App() {
   };
 
   let main;
-  if (!state) {
+  if (diagnostics && state?.platform === "android") {
+    main = <Diagnostics onClose={() => setDiagnostics(false)} />;
+  } else if (!state) {
     main = <p className="app__message">{failed ? t("app.coreFailed") : t("app.loading")}</p>;
   } else if (state.phase === "not_configured") {
     main = (
@@ -114,6 +119,8 @@ export default function App() {
         platform={state.platform}
         permissionsMissing={android !== null && !android.permissionsOk}
         onFixPermissions={() => setOnboarding(true)}
+        alarm={android?.alarm ?? null}
+        onStopAlarm={() => void api.androidStopAlarm().then(refresh, () => {})}
         onChanged={() => void refresh()}
       />
     );
@@ -140,7 +147,11 @@ export default function App() {
               platform={state?.platform ?? "windows"}
               android={paired ? android : null}
               onAndroidChange={() => void refresh()}
-              onOpenPermissions={() => setOnboarding(true)}
+              onOpenPermissions={() => {
+                setDiagnostics(false);
+                setOnboarding(true);
+              }}
+              onOpenDiagnostics={() => setDiagnostics(true)}
               debug={state?.debug ?? null}
               onDebugChange={() => void refresh()}
             />

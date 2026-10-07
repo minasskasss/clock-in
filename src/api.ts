@@ -82,7 +82,16 @@ export interface AppStateView {
 export type AlertMode = "ring" | "notification";
 
 /** One Android checklist item (src-tauri: `android_open_settings`). */
-export type PermissionKind = "notifications" | "exactAlarms" | "fullScreen" | "battery" | "unusedApps" | "oem";
+export type PermissionKind =
+  | "notifications"
+  | "exactAlarms"
+  | "fullScreen"
+  | "battery"
+  | "unusedApps"
+  | "oem"
+  | "xiaomiAutostart"
+  | "xiaomiPermissions"
+  | "xiaomiBattery";
 
 /** The Android onboarding checklist (SPEC §8.2). */
 export interface PermissionStatus {
@@ -104,6 +113,34 @@ export interface AndroidView {
   permissions: PermissionStatus | null;
   /** Everything the alarms need is granted (the maker step is advice). */
   permissionsOk: boolean;
+  /** A ring-mode alarm in progress on this phone (Today shows «Σταμάτημα»). */
+  alarm: AlarmBanner | null;
+}
+
+export interface AlarmBanner {
+  /** False during the silent minutes between rings. */
+  ringing: boolean;
+  checkIn: string[];
+  checkOut: string[];
+}
+
+/** «Διαγνωστικά» (Android): read-only, no secrets. */
+export interface DiagnosticsView {
+  appVersion: string;
+  environment: "dev" | "prod";
+  phone: string;
+  androidVersion: string;
+  sdk: number;
+  /** MIUI, HyperOS or One UI version, or "". */
+  makerOs: string;
+  alertMode: AlertMode;
+  permissions: PermissionStatus | null;
+  lastSync: LocalStamp | null;
+  lastRefresh: LocalStamp | null;
+  lastRefreshOk: boolean | null;
+  nextAlarm: LocalStamp | null;
+  lastAlarm: LocalStamp | null;
+  lastAlarmHow: "fullScreen" | "opened" | "notification" | "notificationMode" | null;
 }
 
 /** The alarm window's content (src-tauri/src/alarms.rs). Times are "HH:MM". */
@@ -312,4 +349,7 @@ export const api = {
   /** Android: opens the phone's screen that fixes one checklist item. */
   androidOpenSettings: (kind: PermissionKind) => call<void>("android_open_settings", { kind }),
   androidSetOemDone: (done: boolean) => call<void>("android_set_oem_done", { done }),
+  androidStopAlarm: () => call<void>("android_stop_alarm"),
+  androidDiagnostics: () => call<DiagnosticsView | null>("android_diagnostics"),
+  setTheme: (theme: "auto" | "system" | "light" | "dark") => call<void>("set_theme", { theme }),
 };

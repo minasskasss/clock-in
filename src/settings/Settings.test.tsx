@@ -97,7 +97,7 @@ describe("Settings", () => {
       app_state: appState({
         adminUnlocked: true,
         platform: "android",
-        android: { alertMode: "ring", permissions: null, permissionsOk: true },
+        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
       }),
       admin_view: adminView({ settings: { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true } }),
       settings_save: null,

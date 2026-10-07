@@ -13,6 +13,8 @@ interface QuickMenuProps {
   android?: AndroidView | null;
   onAndroidChange?: () => void;
   onOpenPermissions?: () => void;
+  /** Android: the read-only «Διαγνωστικά» view. */
+  onOpenDiagnostics?: () => void;
   /** Debug builds only: profile and fake clock. */
   debug?: AppStateView["debug"];
   onDebugChange?: () => void;
@@ -31,6 +33,7 @@ export function QuickMenu({
   android,
   onAndroidChange,
   onOpenPermissions,
+  onOpenDiagnostics,
   debug,
   onDebugChange,
 }: QuickMenuProps) {
@@ -121,6 +124,18 @@ export function QuickMenu({
                 {android.permissionsOk ? "✓" : "✗"} {t("menu.permissions")}
               </button>
             </fieldset>
+          )}
+          {platform === "android" && onOpenDiagnostics && (
+            <button
+              type="button"
+              className="button button--quiet"
+              onClick={() => {
+                setOpen(false);
+                onOpenDiagnostics();
+              }}
+            >
+              {t("menu.diagnostics")}
+            </button>
           )}
           {debug && <DebugSection debug={debug} onChange={onDebugChange} />}
         </div>

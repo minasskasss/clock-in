@@ -49,6 +49,26 @@ describe("Android onboarding checklist", () => {
     expect(onDone).toHaveBeenCalledOnce();
   });
 
+  it("lists the Xiaomi steps, each opening its own screen, confirmed by hand", async () => {
+    const calls = mockCommands({ android_open_settings: null, android_set_oem_done: null });
+    const user = userEvent.setup();
+    render(<Onboarding permissions={status({ oem: "xiaomi" })} permissionsOk onDone={() => {}} />);
+    expect(screen.getByText("Επιπλέον ρυθμίσεις για Xiaomi")).toBeInTheDocument();
+    expect(screen.getByText(/Αυτόματη εκκίνηση/)).toBeInTheDocument();
+    expect(screen.getByText(/Εμφάνιση στην οθόνη κλειδώματος/)).toBeInTheDocument();
+    expect(screen.getByText(/Χωρίς περιορισμούς/)).toBeInTheDocument();
+    expect(screen.getByText(/λουκέτο/)).toBeInTheDocument();
+    for (const button of screen.getAllByRole("button", { name: "Άνοιγμα" })) await user.click(button);
+    expect(callsTo(calls, "android_open_settings")).toEqual([
+      { kind: "xiaomiAutostart" },
+      { kind: "xiaomiPermissions" },
+      { kind: "xiaomiBattery" },
+    ]);
+    expect(screen.queryByRole("button", { name: "Ρύθμιση" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Το έκανα" }));
+    expect(callsTo(calls, "android_set_oem_done")).toEqual([{ done: true }]);
+  });
+
   it("says it is checking before Android answered", () => {
     render(<Onboarding permissions={null} permissionsOk onDone={() => {}} />);
     expect(screen.getByText("Έλεγχος…")).toBeInTheDocument();
@@ -67,5 +87,28 @@ describe("Android onboarding checklist", () => {
     expect(screen.getByText(/ρολόι αυτού του τηλεφώνου/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Διόρθωση" }));
     expect(onFix).toHaveBeenCalledOnce();
+  });
+
+  it("shows a large «Σταμάτημα» on Today while an alarm rings on the phone", async () => {
+    const user = userEvent.setup();
+    const onStop = vi.fn();
+    const banners = { offline: false, lastSync: null, clockSkew: false, horizonShort: false, soundOff: false, refusedMarks: [] };
+    render(
+      <Today
+        today={today()}
+        banners={banners}
+        platform="android"
+        permissionsMissing={false}
+        onFixPermissions={() => {}}
+        alarm={{ ringing: true, checkIn: ["Μαρία Παππά"], checkOut: [] }}
+        onStopAlarm={onStop}
+        onChanged={() => {}}
+      />,
+    );
+    const bar = screen.getByRole("alert");
+    expect(bar).toHaveTextContent("Χτυπά ειδοποίηση για την κάρτα");
+    expect(bar).toHaveTextContent("Άφιξη: Μαρία Παππά");
+    await user.click(within(bar).getByRole("button", { name: "Σταμάτημα" }));
+    expect(onStop).toHaveBeenCalledOnce();
   });
 });

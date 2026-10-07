@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   api,
+  type AlarmBanner,
   type Banners as BannerState,
   type MarkKind,
   type Platform,
@@ -40,12 +41,24 @@ interface TodayProps {
   /** Android: a permission the alarms need is missing (SPEC §6 banner). */
   permissionsMissing: boolean;
   onFixPermissions: () => void;
+  /** Android: a ring-mode alarm in progress on this phone. */
+  alarm?: AlarmBanner | null;
+  onStopAlarm?: () => void;
   /** Called after a mark so the screen updates at once. */
   onChanged: () => void;
 }
 
 /** The main screen (SPEC §6). */
-export function Today({ today, banners, platform, permissionsMissing, onFixPermissions, onChanged }: TodayProps) {
+export function Today({
+  today,
+  banners,
+  platform,
+  permissionsMissing,
+  onFixPermissions,
+  alarm = null,
+  onStopAlarm,
+  onChanged,
+}: TodayProps) {
   const { t } = useTranslation();
   const [confirm, setConfirm] = useState<{ row: Row; kind: MarkKind } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +83,7 @@ export function Today({ today, banners, platform, permissionsMissing, onFixPermi
 
   return (
     <section className="today" aria-labelledby="today-heading">
+      {alarm && <AlarmBar alarm={alarm} onStop={() => onStopAlarm?.()} />}
       <div className="today__head">
         <h1 id="today-heading" className="today__date">
           {heading && (
@@ -169,6 +183,34 @@ function RowItem({ row, onTap }: { row: Row; onTap: (kind: MarkKind) => void }) 
     <button type="button" className={`${className} row--tappable`} onClick={() => onTap(kind)}>
       {content}
     </button>
+  );
+}
+
+/**
+ * Android: the alarm ringing on this phone (or silent between rings), with
+ * a large «Σταμάτημα», so it can be stopped even if its notification was
+ * swiped away. Like the alarm screen's button, it marks nobody.
+ */
+function AlarmBar({ alarm, onStop }: { alarm: AlarmBanner; onStop: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="alarm-bar" role="alert">
+      <p className="alarm-bar__title">{alarm.ringing ? t("today.alarmRinging") : t("today.alarmSilent")}</p>
+      {alarm.checkIn.length > 0 && (
+        <p className="alarm-bar__names">
+          {t("alarm.checkIn")}: {alarm.checkIn.join(", ")}
+        </p>
+      )}
+      {alarm.checkOut.length > 0 && (
+        <p className="alarm-bar__names">
+          {t("alarm.checkOut")}: {alarm.checkOut.join(", ")}
+        </p>
+      )}
+      <button type="button" className="button button--primary button--large alarm-bar__stop" onClick={onStop}>
+        {t("alarm.stop")}
+      </button>
+      <p className="alarm-bar__note">{t("alarm.note")}</p>
+    </div>
   );
 }
 

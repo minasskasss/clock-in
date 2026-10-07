@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { api } from "../api";
 import {
   applyTheme,
   loadThemePreference,
@@ -20,6 +21,14 @@ export function useTheme(autoDark: boolean | null): [ThemePreference, (preferenc
   useEffect(() => {
     if (autoDark !== null) rememberAutoDark(autoDark);
   }, [autoDark]);
+
+  // Rust passes the choice on to Android's native alarm screen. Sent once
+  // the app core answers (autoDark arrives with the first state) and on
+  // every change.
+  const ready = autoDark !== null;
+  useEffect(() => {
+    if (ready) void api.setTheme(preference).catch(() => {});
+  }, [preference, ready]);
 
   useEffect(() => {
     applyTheme(resolveTheme(preference, autoDark));

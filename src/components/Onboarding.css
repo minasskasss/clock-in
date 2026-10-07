@@ -93,3 +93,17 @@
 .checklist__actions:empty {
   display: none;
 }
+
+/* Xiaomi: numbered steps, each with its own «Άνοιγμα». */
+.checklist__steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.checklist__steps li {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}

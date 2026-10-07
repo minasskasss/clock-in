@@ -50,6 +50,44 @@
   font-weight: 600;
 }
 
+/* --- Android: the alarm ringing on this phone --------------------------------------- */
+
+.alarm-bar {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow);
+}
+
+.alarm-bar p {
+  margin: 0;
+}
+
+.alarm-bar__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.alarm-bar__names {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.alarm-bar__stop {
+  width: 100%;
+  min-height: 64px;
+  font-size: 1.375rem;
+}
+
+.alarm-bar__note {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
 /* --- Banners ------------------------------------------------------------------- */
 
 .banners {
