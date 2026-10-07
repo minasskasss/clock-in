@@ -11,7 +11,7 @@ use crate::audio::Player;
 use crate::i18n::text;
 use crate::state::AppState;
 use crate::views::LocalStamp;
-use clockin_core::{AlarmScheduler, RingPhase, RingingAlarm, Snapshot};
+use clockin_core::{AlarmScheduler, RingPhase, RingingAlarm, Snapshot, Sound};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
@@ -63,6 +63,24 @@ impl AlarmView {
     }
 }
 
+/// The sound and the window for one scheduler decision. Both always come
+/// from the same decision, so the sound never plays without the window and
+/// Stop (or nobody left) ends both together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Output {
+    sound: Option<Sound>,
+    window: bool,
+}
+
+impl Output {
+    fn of(alarm: Option<&RingingAlarm>) -> Self {
+        Self {
+            sound: alarm.and_then(RingingAlarm::sound),
+            window: alarm.is_some(),
+        }
+    }
+}
+
 pub struct Alarms {
     scheduler: Mutex<AlarmScheduler>,
     view: RwLock<Option<AlarmView>>,
@@ -106,9 +124,10 @@ impl Alarms {
     /// (alarm, ring) last brought to the front, so each new ring turns the
     /// screen on and raises the window once.
     fn apply(&self, app: &AppHandle, alarm: Option<&RingingAlarm>, rang: &mut Option<(u64, u32)>) {
-        self.player.set(alarm.and_then(RingingAlarm::sound));
+        let output = Output::of(alarm);
+        self.player.set(output.sound);
         *self.view.write().unwrap_or_else(PoisonError::into_inner) = alarm.map(AlarmView::new);
-        let Some(alarm) = alarm else {
+        let (true, Some(alarm)) = (output.window, alarm) else {
             *rang = None;
             if let Some(window) = app.get_webview_window(WINDOW) {
                 let _ = window.destroy();
@@ -161,6 +180,14 @@ impl Alarms {
                 if let (Ok(hwnd), Ok(scale)) = (window.hwnd(), window.scale_factor()) {
                     crate::window_icon::apply(hwnd.0, scale);
                 }
+                // The scheduler runs on another thread; a subclass must be
+                // installed by the thread that owns the window.
+                let guarded = window.clone();
+                let _ = window.run_on_main_thread(move || {
+                    if let Ok(hwnd) = guarded.hwnd() {
+                        crate::keyboard_guard::install(hwnd.0);
+                    }
+                });
                 Some(window)
             }
             Err(e) => {
@@ -270,5 +297,113 @@ mod tests {
         assert_eq!(view.check_out, ["Babis Beta"]);
         assert!(!view.ringing);
         assert_eq!(view.rering_at.as_deref(), Some("09:10"));
+    }
+
+    /// Anna 09:00–17:00 and Babis 09:02–17:00 on Monday 1 June 2026 (Greek
+    /// summer time: 09:00 = 06:00 UTC).
+    fn overlapping() -> Snapshot {
+        let person = |n: u128, first: &str| clockin_core::Staff {
+            id: Uuid::from_u128(n),
+            first_name: first.into(),
+            last_name: "Test".into(),
+            removed_at: None,
+        };
+        let block = |n: u128, staff: u128, h: i8, m: i8| clockin_core::WeeklyBlock {
+            id: Uuid::from_u128(n),
+            staff_id: Uuid::from_u128(staff),
+            weekday: jiff::civil::Weekday::Monday,
+            start: jiff::civil::time(h, m, 0, 0),
+            end: jiff::civil::time(17, 0, 0, 0),
+        };
+        Snapshot {
+            staff: vec![person(1, "Anna"), person(2, "Babis")],
+            blocks: vec![block(10, 1, 9, 0), block(20, 2, 9, 2)],
+            ..Snapshot::default()
+        }
+    }
+
+    fn utc(hm: &str) -> Timestamp {
+        format!("2026-06-01T{hm}:00Z").parse().unwrap()
+    }
+
+    /// Evaluates at `hm` (UTC) and checks the rule for every decision: no
+    /// sound without the window.
+    fn output(s: &mut AlarmScheduler, hm: &str, snap: &Snapshot) -> (Option<RingingAlarm>, Output) {
+        let alarm = s.evaluate(utc(hm), snap).alarm;
+        let out = Output::of(alarm.as_ref());
+        assert!(
+            out.sound.is_none() || out.window,
+            "sound without the window at {hm}"
+        );
+        (alarm, out)
+    }
+
+    #[test]
+    fn stop_always_ends_the_sound_and_the_window_together() {
+        let ringing_in = Output {
+            sound: Some(Sound::CheckIn),
+            window: true,
+        };
+        let off = Output {
+            sound: None,
+            window: false,
+        };
+        let mut snap = overlapping();
+        let mut s = AlarmScheduler::default();
+
+        // 09:00 Anna rings; at 09:02 Babis joins the same alarm.
+        let (first, out) = output(&mut s, "06:00", &snap);
+        assert_eq!(out, ringing_in);
+        let (joined, out) = output(&mut s, "06:02", &snap);
+        assert_eq!(out, ringing_in);
+        let (first, joined) = (first.unwrap(), joined.unwrap());
+        assert_eq!(joined.event.check_in.len(), 2);
+
+        // A Stop from a window that still showed the 09:00 version is
+        // ignored: sound and window both stay.
+        assert!(!s.stop(first.id));
+        assert_eq!(output(&mut s, "06:02", &snap).1, ringing_in);
+
+        // Stop on the current version: both end at once, for good.
+        assert!(s.stop(joined.id));
+        assert_eq!(output(&mut s, "06:02", &snap).1, off);
+
+        // Then Anna is marked: still nothing, also at the re-ring time.
+        snap.marks.push(clockin_core::Mark {
+            id: Uuid::from_u128(100),
+            staff_id: Uuid::from_u128(1),
+            source_block_id: Uuid::from_u128(10),
+            business_date: jiff::civil::date(2026, 6, 1),
+            kind: MarkKind::In,
+        });
+        for hm in ["06:03", "06:12", "06:17"] {
+            assert_eq!(output(&mut s, hm, &snap).1, off, "{hm}");
+        }
+    }
+
+    #[test]
+    fn stop_in_the_silent_gap_closes_the_window_too() {
+        let snap = overlapping();
+        let mut s = AlarmScheduler::default();
+        output(&mut s, "06:00", &snap);
+        output(&mut s, "06:02", &snap);
+        // 09:07: Babis's ring (from 09:02) has gone silent; the window stays.
+        let (alarm, out) = output(&mut s, "06:07", &snap);
+        assert_eq!(
+            out,
+            Output {
+                sound: None,
+                window: true
+            }
+        );
+        assert!(s.stop(alarm.unwrap().id));
+        assert_eq!(
+            output(&mut s, "06:07", &snap).1,
+            Output {
+                sound: None,
+                window: false
+            }
+        );
+        assert!(!output(&mut s, "06:12", &snap).1.window, "no re-ring");
     }
 }
