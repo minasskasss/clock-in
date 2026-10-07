@@ -73,6 +73,20 @@ internal object Ring {
     }
 
     /**
+     * A cycle can start before notifications are allowed (an alarm up to 15
+     * minutes late right after pairing, Android 13+): Android then plays the
+     * sound but shows nothing. Once they are allowed, post it so «Σταμάτημα»
+     * is reachable. Called with the permission check and while ringing.
+     */
+    fun ensureShown(context: Context) {
+        if (!Permissions.notificationsAllowed(context)) return
+        val active = Store.get(context).active() ?: return
+        val id = if (RingService.running?.isRinging == true) Notifications.ID_RINGING else Notifications.ID_SILENT
+        if (id == Notifications.ID_SILENT && active.reringAtMs == null) return
+        if (!Notifications.isShowing(context, id)) repost(context)
+    }
+
+    /**
      * The plan changed (a mark on this phone, a schedule edit): names whose
      * alarm is no longer in the plan at the same time are dropped at once,
      * and the cycle ends when nobody is left.
@@ -318,6 +332,7 @@ class RingService : Service() {
             refreshNotification()
             Ring.changed()
         }
+        Ring.ensureShown(this)
         main.post {
             if (ringing) {
                 main.removeCallbacks(recheckTick)

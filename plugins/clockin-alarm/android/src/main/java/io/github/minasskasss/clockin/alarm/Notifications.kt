@@ -223,6 +223,14 @@ internal object Notifications {
         manager(context).cancel(id)
     }
 
+    /** Whether one of this app's notifications is on screen now. */
+    fun isShowing(context: Context, id: Int): Boolean =
+        try {
+            manager(context).activeNotifications.any { it.id == id }
+        } catch (e: Exception) {
+            true
+        }
+
     private fun notify(context: Context, id: Int, notification: Notification) {
         ensureChannels(context)
         try {

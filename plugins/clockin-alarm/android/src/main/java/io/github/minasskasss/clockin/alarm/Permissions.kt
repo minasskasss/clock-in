@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 /**
@@ -52,6 +53,10 @@ internal object Permissions {
         val status = status(context)
         return listOf("notifications", "exactAlarms", "fullScreen", "battery", "unusedApps").all { status[it] == true }
     }
+
+    /** The app may post notifications (Android 13+ asks; anyone can switch them off). */
+    fun notificationsAllowed(context: Context): Boolean =
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     private fun packageUri(context: Context) = Uri.parse("package:" + context.packageName)
 

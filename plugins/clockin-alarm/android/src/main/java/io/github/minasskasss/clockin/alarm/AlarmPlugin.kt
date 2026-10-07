@@ -95,6 +95,7 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
         if (listOf("notifications", "exactAlarms", "fullScreen", "battery", "unusedApps").all { status[it] == true }) {
             Notifications.cancel(context, Notifications.ID_SETUP)
         }
+        Ring.ensureShown(context)
         invoke.resolve(result)
     }
 
