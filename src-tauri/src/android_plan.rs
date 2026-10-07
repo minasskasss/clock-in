@@ -1,18 +1,25 @@
 //! The plan the Android alarm code schedules from (ARCHITECTURE §10).
 //! Compiled for Android and for the tests.
 
-use clockin_core::{Snapshot, alarm_plan, is_suppressed, plan_window};
+use clockin_core::{Snapshot, alarm_plan, auto_dark_windows, is_suppressed, plan_window};
 use jiff::Timestamp;
-use tauri_plugin_clockin_alarm::{BridgeItem, BridgePlan};
+use jiff::civil::Time;
+use tauri_plugin_clockin_alarm::{BridgeItem, BridgePlan, BridgeWindow};
+
+/// Days of automatic-theme dark periods sent after today's: the plan's 14.
+const DARK_WINDOW_DAYS: u32 = 15;
 
 /// The 14-day plan window from `snapshot`, without the alarms that marks
 /// known on this device (including ones not yet synced) already make
-/// unnecessary. No snapshot (unpaired, or never synced): no alarms.
+/// unnecessary. No snapshot (unpaired, or never synced): no alarms. Also
+/// the alarm screen's theme and the automatic theme's dark periods.
 #[must_use]
 pub fn bridge_plan(
     snapshot: Option<&Snapshot>,
     alert_mode: &'static str,
+    theme: &'static str,
     config_version: i64,
+    rollover: Time,
     now: Timestamp,
 ) -> BridgePlan {
     let (from, until) = plan_window(now);
@@ -33,6 +40,14 @@ pub fn bridge_plan(
         alert_mode,
         config_version,
         horizon_end: snapshot.is_some().then(|| until.to_string()),
+        theme,
+        dark_windows: auto_dark_windows(now, DARK_WINDOW_DAYS, rollover)
+            .into_iter()
+            .map(|(start, end)| BridgeWindow {
+                start: start.as_millisecond(),
+                end: end.as_millisecond(),
+            })
+            .collect(),
     }
 }
 
@@ -65,6 +80,8 @@ mod tests {
         }
     }
 
+    const FIVE: Time = Time::constant(5, 0, 0, 0);
+
     /// Tuesday 2026-10-06, 09:00 in Athens.
     fn now() -> Timestamp {
         "2026-10-06T06:00:00Z".parse().unwrap()
@@ -72,7 +89,7 @@ mod tests {
 
     #[test]
     fn sends_the_plan_window_with_utc_times() {
-        let plan = bridge_plan(Some(&snapshot()), "ring", 4, now());
+        let plan = bridge_plan(Some(&snapshot()), "ring", "auto", 4, FIVE, now());
         // Two Tuesdays in the 14-day window, check-in and check-out each.
         assert_eq!(plan.items.len(), 4);
         assert_eq!(plan.items[0].fires_at, "2026-10-06T09:00:00Z");
@@ -98,7 +115,7 @@ mod tests {
             business_date: date(2026, 10, 6),
             kind: MarkKind::In,
         });
-        let plan = bridge_plan(Some(&s), "notification", 4, now());
+        let plan = bridge_plan(Some(&s), "notification", "dark", 4, FIVE, now());
         assert_eq!(plan.items.len(), 3);
         assert_eq!(plan.items[0].kind, "out");
         assert_eq!(plan.alert_mode, "notification");
@@ -106,8 +123,19 @@ mod tests {
 
     #[test]
     fn no_data_means_no_alarms() {
-        let plan = bridge_plan(None, "ring", 0, now());
+        let plan = bridge_plan(None, "ring", "auto", 0, FIVE, now());
         assert!(plan.items.is_empty());
         assert_eq!(plan.horizon_end, None);
+    }
+
+    #[test]
+    fn sends_the_theme_and_the_automatic_themes_dark_periods() {
+        let plan = bridge_plan(None, "ring", "system", 0, FIVE, now());
+        assert_eq!(plan.theme, "system");
+        assert_eq!(plan.dark_windows.len(), 16);
+        // Tonight 21:00 until tomorrow 05:00, Athens summer time (UTC+3).
+        let ms = |s: &str| s.parse::<Timestamp>().unwrap().as_millisecond();
+        assert_eq!(plan.dark_windows[0].start, ms("2026-10-06T18:00:00Z"));
+        assert_eq!(plan.dark_windows[0].end, ms("2026-10-07T02:00:00Z"));
     }
 }

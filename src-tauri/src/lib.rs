@@ -225,6 +225,9 @@ pub fn run() {
             commands::set_alert_mode,
             commands::android_open_settings,
             commands::android_set_oem_done,
+            commands::set_theme,
+            commands::android_stop_alarm,
+            commands::android_diagnostics,
             commands::debug_set_clock,
         ])
         .run(tauri::generate_context!())

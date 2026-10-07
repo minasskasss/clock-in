@@ -64,7 +64,7 @@ pub use sync::{
     HORIZON_WARNING_BELOW, MAX_CLOCK_SKEW, PLAN_REFRESH_BELOW, POLL_INTERVAL, clock_skew_exceeded,
     horizon_short, plan_needs_refresh, sync_retry_delay,
 };
-pub use theme::{AUTO_DARK_FROM, auto_theme_is_dark};
+pub use theme::{AUTO_DARK_FROM, auto_dark_windows, auto_theme_is_dark};
 pub use today::{RowStatus, TodayRow, TodayView, has_mark, today_view};
 pub use validate::{
     BlockIssue, BlockProblem, DayBlock, MAX_BLOCK_MINUTES, MAX_NAME_CHARS, MAX_OFFSET_MINUTES,

@@ -32,6 +32,14 @@ pub struct BridgeItem {
     pub name: String,
 }
 
+/// A period, in epoch milliseconds, `[start, end)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeWindow {
+    pub start: i64,
+    pub end: i64,
+}
+
 /// What Kotlin schedules from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +51,41 @@ pub struct BridgePlan {
     pub config_version: i64,
     /// RFC 3339.
     pub horizon_end: Option<String>,
+    /// This phone's theme for the alarm screen: `auto`, `system`, `light` or `dark`.
+    pub theme: &'static str,
+    /// When the automatic theme is dark (`clockin-core::auto_dark_windows`),
+    /// so Kotlin only compares instants.
+    pub dark_windows: Vec<BridgeWindow>,
+}
+
+/// The ring-mode alarm cycle in progress on this phone, if any.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlarmStatus {
+    pub active: bool,
+    /// False during the silent minutes between rings.
+    pub ringing: bool,
+    pub check_in: Vec<String>,
+    pub check_out: Vec<String>,
+}
+
+/// What the diagnostics view shows from Kotlin. Times are epoch milliseconds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Diagnostics {
+    pub manufacturer: String,
+    pub model: String,
+    /// e.g. "13".
+    pub android_version: String,
+    pub sdk: i32,
+    /// MIUI or HyperOS version, or "".
+    pub maker_os: String,
+    pub last_refresh_at: Option<i64>,
+    pub last_refresh_ok: Option<bool>,
+    pub next_alarm_at: Option<i64>,
+    pub last_alarm_at: Option<i64>,
+    /// `fullScreen`, `opened` (from the notification), `notification` or `notificationMode`.
+    pub last_alarm_how: Option<String>,
 }
 
 /// The onboarding checklist (SPEC §8.2).
@@ -108,6 +151,8 @@ mod tests {
             alert_mode: "ring",
             config_version: 7,
             horizon_end: None,
+            theme: "auto",
+            dark_windows: vec![BridgeWindow { start: 1, end: 2 }],
         };
         assert_eq!(
             serde_json::to_value(&plan).unwrap(),
@@ -121,6 +166,8 @@ mod tests {
                 "alertMode": "ring",
                 "configVersion": 7,
                 "horizonEnd": null,
+                "theme": "auto",
+                "darkWindows": [{ "start": 1, "end": 2 }],
             })
         );
     }

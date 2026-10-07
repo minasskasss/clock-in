@@ -42,6 +42,7 @@ const SETTING_LOCKOUT_UNTIL: &str = "lockout_until";
 const SETTING_ALARMS_HANDLED: &str = "alarms_handled";
 /// Android: ring or notification (SPEC §8.2), per device.
 const SETTING_ALERT_MODE: &str = "alert_mode";
+const SETTING_THEME: &str = "theme";
 const DB_FILE: &str = "local.db";
 /// How long an admin call waits for the sync round that shows its result.
 const SYNC_WAIT: Duration = Duration::from_secs(10);
@@ -164,6 +165,31 @@ impl AlertMode {
         match self {
             Self::Ring => "ring",
             Self::Notification => "notification",
+        }
+    }
+}
+
+/// This device's theme choice (SPEC §3). The webview applies it itself;
+/// Android's native alarm screen gets it through the plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemePreference {
+    /// Dark from 21:00 until the business day ends (`clockin-core::auto_theme_is_dark`).
+    Auto,
+    /// The phone's or PC's own light/dark setting.
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemePreference {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
         }
     }
 }
@@ -302,6 +328,31 @@ impl AppState {
             mode.as_str(),
             Timestamp::now(),
         )?;
+        Ok(())
+    }
+
+    /// This device's theme choice, as the UI last reported it; Auto by default.
+    #[cfg(any(target_os = "android", test))]
+    #[must_use]
+    pub fn theme(&self) -> ThemePreference {
+        match lock(&self.ui_store)
+            .device_setting(SETTING_THEME)
+            .ok()
+            .flatten()
+            .as_deref()
+        {
+            Some("system") => ThemePreference::System,
+            Some("light") => ThemePreference::Light,
+            Some("dark") => ThemePreference::Dark,
+            _ => ThemePreference::Auto,
+        }
+    }
+
+    /// # Errors
+    ///
+    /// If the local database can't be written.
+    pub fn set_theme(&self, theme: ThemePreference) -> Result<(), CmdError> {
+        lock(&self.ui_store).set_device_setting(SETTING_THEME, theme.as_str(), Timestamp::now())?;
         Ok(())
     }
 
@@ -1099,7 +1150,7 @@ mod tests {
     }
 
     #[test]
-    fn the_alert_mode_is_ring_until_changed_and_survives_a_restart() {
+    fn the_alert_mode_and_theme_keep_their_defaults_until_changed_and_survive_a_restart() {
         let dir = temp_dir();
         let secrets = || -> Box<dyn SecretStore> {
             let s = MemorySecrets::default();
@@ -1108,11 +1159,14 @@ mod tests {
         };
         let (state, _) = AppState::open(Profile::default(), &dir, secrets(), None).unwrap();
         assert_eq!(state.alert_mode(), AlertMode::Ring);
+        assert_eq!(state.theme(), ThemePreference::Auto);
         state.set_alert_mode(AlertMode::Notification).unwrap();
+        state.set_theme(ThemePreference::Dark).unwrap();
         assert_eq!(state.alert_mode(), AlertMode::Notification);
         drop(state);
         let (state, _) = AppState::open(Profile::default(), &dir, secrets(), None).unwrap();
         assert_eq!(state.alert_mode(), AlertMode::Notification);
+        assert_eq!(state.theme(), ThemePreference::Dark);
         assert_eq!(state.config_version(), None);
         assert!(!state.default_device_name().is_empty());
         drop(state);

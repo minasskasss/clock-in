@@ -1,7 +1,7 @@
 //! Android: calls into the Kotlin `AlarmPlugin`. Every call blocks until
 //! Kotlin answers on the main thread (see the crate docs).
 
-use crate::{BridgePlan, PermissionStatus};
+use crate::{AlarmStatus, BridgePlan, Diagnostics, PermissionStatus};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tauri::Runtime;
 use tauri::plugin::PluginHandle;
@@ -138,6 +138,31 @@ impl<R: Runtime> AlarmBridge<R> {
                 publishable_key,
             },
         )
+    }
+
+    /// The ring-mode alarm in progress, if any.
+    ///
+    /// # Errors
+    ///
+    /// If the Kotlin call fails.
+    pub fn alarm_status(&self) -> Result<AlarmStatus, BridgeError> {
+        self.call("alarmStatus", ())
+    }
+
+    /// «Σταμάτημα» from the app's Today screen: ends the alarm cycle on this phone.
+    ///
+    /// # Errors
+    ///
+    /// If the Kotlin call fails.
+    pub fn stop_alarm(&self) -> Result<(), BridgeError> {
+        self.call::<()>("stopAlarm", ())
+    }
+
+    /// # Errors
+    ///
+    /// If the Kotlin call fails.
+    pub fn diagnostics(&self) -> Result<Diagnostics, BridgeError> {
+        self.call("diagnostics", ())
     }
 
     /// The phone's own name (e.g. "Galaxy S24 Ultra").

@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Wry};
-use tauri_plugin_clockin_alarm::{AlarmBridge, BridgeItem, PermissionStatus};
+use tauri_plugin_clockin_alarm::{AlarmBridge, AlarmStatus, BridgePlan, PermissionStatus};
 use tokio::sync::Notify;
 
 /// How often the checklist is re-read (the user may come back from Android's settings).
@@ -27,7 +27,8 @@ const RESEND_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 #[derive(Default)]
 pub struct Android {
     status: RwLock<Option<PermissionStatus>>,
-    /// Re-send the plan now (alert mode changed).
+    alarm: RwLock<AlarmStatus>,
+    /// Re-send the plan now (alert mode or theme changed).
     pub wake: Notify,
 }
 
@@ -43,6 +44,19 @@ impl Android {
 
     fn set_status(&self, status: PermissionStatus) {
         *self.status.write().unwrap_or_else(PoisonError::into_inner) = Some(status);
+    }
+
+    /// The ring-mode alarm in progress, as last read.
+    #[must_use]
+    pub fn alarm(&self) -> AlarmStatus {
+        self.alarm
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn set_alarm(&self, alarm: AlarmStatus) {
+        *self.alarm.write().unwrap_or_else(PoisonError::into_inner) = alarm;
     }
 }
 
@@ -105,9 +119,10 @@ pub fn start_app(app: &AppHandle, data_dir: &Path) -> Result<(), String> {
 }
 
 /// Sends Kotlin the plan whenever it changes (new data, a mark, the alert
-/// mode, pairing) and reads the permission checklist every few seconds.
+/// mode, the theme, pairing) and reads the permission checklist and the
+/// alarm in progress every few seconds.
 async fn feed(app: AppHandle, state: Arc<AppState>, android: Arc<Android>) {
-    let mut sent: Option<(Vec<BridgeItem>, &'static str, i64)> = None;
+    let mut sent: Option<BridgePlan> = None;
     let mut sent_at = Instant::now();
     loop {
         let snapshot = match state.core_snapshot() {
@@ -119,10 +134,16 @@ async fn feed(app: AppHandle, state: Arc<AppState>, android: Arc<Android>) {
         let plan = bridge_plan(
             snapshot.as_ref(),
             state.alert_mode().as_str(),
+            state.theme().as_str(),
             state.config_version().unwrap_or(0),
+            state.rollover(),
             Timestamp::now(),
         );
-        let key = (plan.items.clone(), plan.alert_mode, plan.config_version);
+        // The horizon moves with the clock: it alone is no reason to re-send.
+        let key = BridgePlan {
+            horizon_end: None,
+            ..plan.clone()
+        };
         if sent.as_ref() != Some(&key) || sent_at.elapsed() > RESEND_EVERY {
             match bridge(&app, move |b| b.set_plan(&plan)).await {
                 Some(Ok(())) => {
@@ -135,6 +156,9 @@ async fn feed(app: AppHandle, state: Arc<AppState>, android: Arc<Android>) {
         }
         if let Some(Ok(status)) = bridge(&app, |b| b.permission_status()).await {
             android.set_status(status);
+        }
+        if let Some(Ok(alarm)) = bridge(&app, |b| b.alarm_status()).await {
+            android.set_alarm(alarm);
         }
         tokio::select! {
             () = tokio::time::sleep(STATUS_EVERY) => {}

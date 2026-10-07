@@ -1,8 +1,8 @@
 //! The "Αυτόματο" (automatic) theme: dark in the evening and at night, light
 //! during the day (SPEC §3). The UI only asks "is it dark now?".
 
-use crate::business_day::business_date_for;
-use crate::shop_time::resolve_local_at;
+use crate::business_day::{business_date_for, business_day_start};
+use crate::shop_time::{add_days, resolve_local_at};
 use jiff::Timestamp;
 use jiff::civil::Time;
 
@@ -19,6 +19,27 @@ pub const AUTO_DARK_FROM: Time = Time::constant(21, 0, 0, 0);
 pub fn auto_theme_is_dark(now: Timestamp, rollover: Time) -> bool {
     let business_date = business_date_for(now, rollover);
     resolve_local_at(business_date, AUTO_DARK_FROM).is_some_and(|dark_from| now >= dark_from)
+}
+
+/// The automatic theme's dark periods, `[start, end)`, for the business day
+/// containing `from` and the `days` after it: [`auto_theme_is_dark`] is true
+/// exactly inside them. For code outside the core (Android's alarm screen)
+/// that may only compare instants.
+#[must_use]
+pub fn auto_dark_windows(
+    from: Timestamp,
+    days: u32,
+    rollover: Time,
+) -> Vec<(Timestamp, Timestamp)> {
+    let first = business_date_for(from, rollover);
+    (0..=i64::from(days))
+        .filter_map(|i| {
+            let date = add_days(first, i)?;
+            let start = resolve_local_at(date, AUTO_DARK_FROM)?;
+            let end = business_day_start(add_days(date, 1)?, rollover)?;
+            (start < end).then_some((start, end))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -165,5 +186,24 @@ mod tests {
                 ("2026-10-25T01:15:00Z", false), // second 03:15
             ],
         );
+    }
+
+    #[test]
+    fn dark_windows_match_the_rule() {
+        // Every 5 minutes over 4 days around each daylight-saving change, for
+        // the earliest, a middle and the latest rollover.
+        for start in ["2026-03-27T12:00:00Z", "2026-10-23T12:00:00Z"] {
+            for rollover in [time(0, 0, 0, 0), time(3, 30, 0, 0), FIVE, time(8, 0, 0, 0)] {
+                let from = utc(start);
+                let windows = auto_dark_windows(from, 4, rollover);
+                assert_eq!(windows.len(), 5, "{start} {rollover}");
+                let mut t = from;
+                while t < from + jiff::Span::new().hours(4 * 24) {
+                    let inside = windows.iter().any(|&(a, b)| a <= t && t < b);
+                    assert_eq!(inside, auto_theme_is_dark(t, rollover), "{t} {rollover}");
+                    t += jiff::Span::new().minutes(5);
+                }
+            }
+        }
     }
 }
