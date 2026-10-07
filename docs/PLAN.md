@@ -194,6 +194,10 @@ The test phone is paired to **dev** during development.
 - Review the security checklist in ARCHITECTURE §5 item by item, and record the result in the PR.
 - Test offline for longer than 1 hour, then reconnect.
 - Run the purge job manually on dev and verify it.
+- Crash recovery on Windows (owner decision, DECISIONS 2026-10-07):
+  - a crash log: on a panic the app appends one line to `crash.log` in its data folder (time, version, dev/prod, thread, the panic message and its file:line; no backtrace, no data, codes or secrets), capped at about 100 KB;
+  - a restart watcher: the installed app runs under a small watcher process that restarts it within seconds if it ends without Tray → Quit, and gives up after 5 crashes in 10 minutes;
+  - test both with a deliberate crash in a debug build, then on the dev-pointed installer.
 - Visual polish pass on both platforms.
 - Write `docs/RECOVERY.md` for Minas (non-technical, step by step):
   - reset a forgotten passphrase (Supabase SQL editor);
@@ -201,6 +205,7 @@ The test phone is paired to **dev** during development.
   - change the quit code if forgotten (via passphrase → Settings);
   - install a new version on the shop PC (AnyDesk) and on the phone (APK file);
   - unpause a Supabase project;
+  - read the crash log on the shop PC (AnyDesk);
   - what to do if the keystore is lost;
   - the 2027 Android developer verification steps.
 - Write a short `README.md`.
