@@ -42,6 +42,25 @@ export default function App() {
     if (platform) document.documentElement.dataset.platform = platform;
   }, [platform]);
 
+  // Android draws edge to edge, and older WebViews report no safe-area
+  // insets: the bars' sizes come from Android too (App.css uses the larger).
+  useEffect(() => {
+    if (platform !== "android") return;
+    const apply = () =>
+      void api.androidInsets().then(
+        (insets) => {
+          if (!insets) return;
+          for (const side of ["top", "right", "bottom", "left"] as const) {
+            document.documentElement.style.setProperty(`--android-inset-${side}`, `${insets[side]}px`);
+          }
+        },
+        () => {},
+      );
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [platform]);
+
   // Tray → Quit (Rust shows this window first, then asks for the quit code).
   useEffect(() => {
     let unlisten: (() => void) | null = null;

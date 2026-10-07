@@ -258,6 +258,10 @@ pub struct DiagnosticsView {
     sdk: i32,
     /// MIUI or HyperOS version, or "".
     maker_os: String,
+    /// The Android System WebView's version, or "".
+    web_view_version: String,
+    /// False when it is older than the app's screens need.
+    web_view_ok: bool,
     alert_mode: AlertMode,
     permissions: Option<tauri_plugin_clockin_alarm::PermissionStatus>,
     /// The app's own last sync with the server (while it was open).
@@ -307,6 +311,8 @@ pub async fn android_diagnostics(
             android_version: d.android_version,
             sdk: d.sdk,
             maker_os: d.maker_os,
+            web_view_version: d.web_view_version,
+            web_view_ok: d.web_view_ok.unwrap_or(true),
             alert_mode: state.alert_mode(),
             permissions,
             last_sync: if paired {
@@ -324,6 +330,30 @@ pub async fn android_diagnostics(
     #[cfg(not(target_os = "android"))]
     let view = None;
     Ok(view)
+}
+
+/// Android: the status and navigation bars around the app, in CSS pixels,
+/// for WebViews that don't report them as safe-area insets. None elsewhere.
+///
+/// # Errors
+///
+/// If Android can't be asked.
+#[tauri::command]
+#[cfg_attr(
+    not(target_os = "android"),
+    allow(unused_variables, clippy::unused_async)
+)]
+pub async fn android_insets(
+    app: tauri::AppHandle,
+) -> Result<Option<tauri_plugin_clockin_alarm::Insets>, CmdError> {
+    #[cfg(target_os = "android")]
+    return match crate::android::bridge(&app, |b| b.insets()).await {
+        Some(Ok(insets)) => Ok(Some(insets)),
+        Some(Err(e)) => Err(CmdError::internal(e)),
+        None => Ok(None),
+    };
+    #[cfg(not(target_os = "android"))]
+    Ok(None)
 }
 
 // --- First run --------------------------------------------------------------

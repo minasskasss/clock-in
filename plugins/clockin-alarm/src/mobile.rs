@@ -1,7 +1,7 @@
 //! Android: calls into the Kotlin `AlarmPlugin`. Every call blocks until
 //! Kotlin answers on the main thread (see the crate docs).
 
-use crate::{AlarmStatus, BridgePlan, Diagnostics, PermissionStatus};
+use crate::{AlarmStatus, BridgePlan, Diagnostics, Insets, PermissionStatus};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tauri::Runtime;
 use tauri::plugin::PluginHandle;
@@ -163,6 +163,15 @@ impl<R: Runtime> AlarmBridge<R> {
     /// If the Kotlin call fails.
     pub fn diagnostics(&self) -> Result<Diagnostics, BridgeError> {
         self.call("diagnostics", ())
+    }
+
+    /// The system bars around the app, in CSS pixels.
+    ///
+    /// # Errors
+    ///
+    /// If the Kotlin call fails.
+    pub fn insets(&self) -> Result<Insets, BridgeError> {
+        self.call("insets", ())
     }
 
     /// The phone's own name (e.g. "Galaxy S24 Ultra").

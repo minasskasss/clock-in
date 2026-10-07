@@ -6,14 +6,17 @@ import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.webkit.WebView
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import app.tauri.plugin.JSArray
 
 /**
  * The onboarding checklist (SPEC §8.2, ARCHITECTURE §10): what is granted,
@@ -27,13 +30,16 @@ internal object Permissions {
     fun status(context: Context): Map<String, Any> {
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val notifications = (Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
-            !Notifications.alarmChannelBlocked(context)
+        // Below Android 13 there is no permission to ask, but the user can
+        // still switch the app's notifications off (all, or the alarm channel).
+        val notifications = notificationsAllowed(context) && !Notifications.alarmChannelBlocked(context)
         val fullScreen = Build.VERSION.SDK_INT < 34 || nm.canUseFullScreenIntent()
-        // App hibernation (Android 11+): an app not opened for months loses
-        // its alarms. "Pause app activity if unused" must be off.
-        val unusedExempt = Build.VERSION.SDK_INT < 30 || context.packageManager.isAutoRevokeWhitelisted
+        // App hibernation (Android 12+): an app not opened for months can't
+        // run alarms or jobs. "Pause app activity if unused" must be off. On
+        // Android 11 the same switch only resets runtime permissions, and the
+        // app has none there (notifications became one in 13), so it can't
+        // stop the alarms: the item isn't shown.
+        val unusedExempt = Build.VERSION.SDK_INT < 31 || context.packageManager.isAutoRevokeWhitelisted
         val brand = Build.MANUFACTURER.lowercase()
         return mapOf(
             "notifications" to notifications,
@@ -45,7 +51,21 @@ internal object Permissions {
             "oem" to (OEM_BRANDS.firstOrNull { brand.contains(it) }
                 ?.let { if (it == "redmi" || it == "poco") "xiaomi" else it } ?: ""),
             "oemDone" to Store.get(context).oemDone(),
+            "sdk" to Build.VERSION.SDK_INT,
+            "notApplicable" to JSArray().apply { notApplicable().forEach { put(it) } },
         )
+    }
+
+    /**
+     * Checklist items with no setting on this Android version (always
+     * allowed there), which the checklist doesn't show: exact alarms need no
+     * permission before 12, full-screen alarms none before 14, and the
+     * "unused app" switch can't affect the alarms before 12 (see above).
+     */
+    fun notApplicable(): List<String> = buildList {
+        if (Build.VERSION.SDK_INT < 31) add("exactAlarms")
+        if (Build.VERSION.SDK_INT < 34) add("fullScreen")
+        if (Build.VERSION.SDK_INT < 31) add("unusedApps")
     }
 
     /** Everything the alarms need is granted (the maker's step is advice; same rule as Rust). */
@@ -111,6 +131,9 @@ internal object Permissions {
             "xiaomiPermissions" -> listOf(
                 Intent("miui.intent.action.APP_PERM_EDITOR")
                     .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                    .putExtra("extra_pkgname", context.packageName),
+                Intent("miui.intent.action.APP_PERM_EDITOR")
+                    .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.AppPermissionsEditorActivity")
                     .putExtra("extra_pkgname", context.packageName),
                 Intent("miui.intent.action.APP_PERM_EDITOR").putExtra("extra_pkgname", context.packageName),
                 appDetails(context),
@@ -183,6 +206,38 @@ internal object Permissions {
         return ""
     }
 
+    /**
+     * The oldest WebView (Chromium) version the app's screens run on: the
+     * web build's target in `vite.config.ts` (DECISIONS, Android 11).
+     */
+    const val MIN_WEBVIEW = 91
+
+    /** The WebView the app's screens run in, or null if Android doesn't say. */
+    fun webView(): PackageInfo? = WebView.getCurrentWebViewPackage()
+
+    /** The WebView's major version, e.g. 120 for "120.0.6099.230", or 0. */
+    fun webViewMajor(info: PackageInfo?): Int =
+        info?.versionName?.substringBefore('.')?.toIntOrNull() ?: 0
+
+    /** Too old for the app's screens: they may stay blank or not work. */
+    fun webViewTooOld(): Boolean {
+        val major = webViewMajor(webView())
+        return major in 1 until MIN_WEBVIEW
+    }
+
+    /** The WebView's own page in the Play Store (Android System WebView, or Chrome on Android 7–9). */
+    fun openWebViewStore(activity: Activity) {
+        val pkg = webView()?.packageName ?: "com.google.android.webview"
+        for (uri in listOf("market://details?id=$pkg", "https://play.google.com/store/apps/details?id=$pkg")) {
+            try {
+                activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
+                return
+            } catch (e: Exception) {
+                // No Play Store: try the web page.
+            }
+        }
+    }
+
     /** The phone and its systems, for the diagnostics view. */
     fun phone(): Map<String, Any> = mapOf(
         "manufacturer" to Build.MANUFACTURER.replaceFirstChar { it.uppercase() },
@@ -190,6 +245,9 @@ internal object Permissions {
         "androidVersion" to Build.VERSION.RELEASE,
         "sdk" to Build.VERSION.SDK_INT,
         "makerOs" to makerOs(),
+        "webViewVersion" to (webView()?.versionName ?: ""),
+        "webViewPackage" to (webView()?.packageName ?: ""),
+        "webViewOk" to !webViewTooOld(),
     )
 
     /** The phone's own name (e.g. "Galaxy S24 Ultra"), for the device list. */

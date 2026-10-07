@@ -4,12 +4,13 @@
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 100%;
-  /* Android draws edge to edge: keep clear of the status and navigation bars. */
+  /* Android draws edge to edge: keep clear of the status and navigation bars.
+     Older WebViews report no safe-area insets, so Android's own (--android-inset-*) count too. */
   padding:
-    calc(var(--space-4) + env(safe-area-inset-top, 0px))
-    calc(clamp(var(--space-4), 4vw, var(--space-7)) + env(safe-area-inset-right, 0px))
-    calc(var(--space-6) + env(safe-area-inset-bottom, 0px))
-    calc(clamp(var(--space-4), 4vw, var(--space-7)) + env(safe-area-inset-left, 0px));
+    calc(var(--space-4) + max(env(safe-area-inset-top, 0px), var(--android-inset-top, 0px)))
+    calc(clamp(var(--space-4), 4vw, var(--space-7)) + max(env(safe-area-inset-right, 0px), var(--android-inset-right, 0px)))
+    calc(var(--space-6) + max(env(safe-area-inset-bottom, 0px), var(--android-inset-bottom, 0px)))
+    calc(clamp(var(--space-4), 4vw, var(--space-7)) + max(env(safe-area-inset-left, 0px), var(--android-inset-left, 0px)));
 }
 
 .app__header {

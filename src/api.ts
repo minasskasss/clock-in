@@ -105,6 +105,10 @@ export interface PermissionStatus {
   oem: string;
   /** The user said the maker step is done (it can't be checked). */
   oemDone: boolean;
+  /** The phone's Android API level. */
+  sdk: number;
+  /** Items with no setting on this Android version (always allowed there), not shown. */
+  notApplicable: PermissionKind[];
 }
 
 export interface AndroidView {
@@ -124,6 +128,14 @@ export interface AlarmBanner {
   checkOut: string[];
 }
 
+/** Android: the system bars around the app, in CSS pixels. */
+export interface Insets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 /** «Διαγνωστικά» (Android): read-only, no secrets. */
 export interface DiagnosticsView {
   appVersion: string;
@@ -133,6 +145,10 @@ export interface DiagnosticsView {
   sdk: number;
   /** MIUI, HyperOS or One UI version, or "". */
   makerOs: string;
+  /** The Android System WebView's version, or "". */
+  webViewVersion: string;
+  /** False when it is older than the app's screens need. */
+  webViewOk: boolean;
   alertMode: AlertMode;
   permissions: PermissionStatus | null;
   lastSync: LocalStamp | null;
@@ -351,5 +367,6 @@ export const api = {
   androidSetOemDone: (done: boolean) => call<void>("android_set_oem_done", { done }),
   androidStopAlarm: () => call<void>("android_stop_alarm"),
   androidDiagnostics: () => call<DiagnosticsView | null>("android_diagnostics"),
+  androidInsets: () => call<Insets | null>("android_insets"),
   setTheme: (theme: "auto" | "system" | "light" | "dark") => call<void>("set_theme", { theme }),
 };

@@ -80,12 +80,28 @@ pub struct Diagnostics {
     pub sdk: i32,
     /// MIUI or HyperOS version, or "".
     pub maker_os: String,
+    /// The Android System WebView's version (e.g. "120.0.6099.230"), or "".
+    pub web_view_version: String,
+    /// The WebView is new enough for the app's screens (`Permissions.MIN_WEBVIEW`).
+    pub web_view_ok: Option<bool>,
     pub last_refresh_at: Option<i64>,
     pub last_refresh_ok: Option<bool>,
     pub next_alarm_at: Option<i64>,
     pub last_alarm_at: Option<i64>,
     /// `fullScreen`, `opened` (from the notification), `notification` or `notificationMode`.
     pub last_alarm_how: Option<String>,
+}
+
+/// The status and navigation bars (and any camera cutout) around the app,
+/// in CSS pixels. The app draws edge to edge; older Android System WebViews
+/// report 0 for `env(safe-area-inset-*)`, so the page uses these as well.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Insets {
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+    pub left: f64,
 }
 
 /// The onboarding checklist (SPEC §8.2).
@@ -102,6 +118,13 @@ pub struct PermissionStatus {
     pub oem: String,
     /// The user confirmed doing that extra step.
     pub oem_done: bool,
+    /// The phone's Android API level.
+    #[serde(default)]
+    pub sdk: i32,
+    /// Items with no setting on this Android version (always allowed
+    /// there), which the checklist doesn't show, e.g. `exactAlarms` before 12.
+    #[serde(default)]
+    pub not_applicable: Vec<String>,
 }
 
 impl PermissionStatus {
@@ -182,6 +205,8 @@ mod tests {
             unused_apps: true,
             oem: "samsung".into(),
             oem_done: false,
+            sdk: 34,
+            not_applicable: vec![],
         };
         assert!(status.all_granted());
         status.full_screen = false;
@@ -191,5 +216,34 @@ mod tests {
         )
         .unwrap();
         assert!(!parsed.battery);
+        assert!(parsed.not_applicable.is_empty());
+    }
+
+    #[test]
+    fn android_11_reports_what_its_checklist_leaves_out() {
+        let parsed: PermissionStatus = serde_json::from_str(
+            r#"{"notifications":true,"exactAlarms":true,"fullScreen":true,"battery":true,"unusedApps":true,"oem":"xiaomi","oemDone":false,"sdk":30,"notApplicable":["exactAlarms","fullScreen","unusedApps"]}"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.sdk, 30);
+        assert_eq!(
+            parsed.not_applicable,
+            ["exactAlarms", "fullScreen", "unusedApps"]
+        );
+        assert!(parsed.all_granted());
+        assert_eq!(
+            serde_json::to_value(&parsed).unwrap()["notApplicable"],
+            serde_json::json!(["exactAlarms", "fullScreen", "unusedApps"])
+        );
+    }
+
+    #[test]
+    fn diagnostics_read_the_web_view() {
+        let d: Diagnostics = serde_json::from_str(
+            r#"{"manufacturer":"Xiaomi","model":"Redmi Note 11S","androidVersion":"11","sdk":30,"makerOs":"MIUI V130","webViewVersion":"90.0.4430.210","webViewPackage":"com.google.android.webview","webViewOk":false}"#,
+        )
+        .unwrap();
+        assert_eq!(d.web_view_version, "90.0.4430.210");
+        assert_eq!(d.web_view_ok, Some(false));
     }
 }

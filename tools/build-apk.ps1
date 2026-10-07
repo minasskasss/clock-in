@@ -9,7 +9,9 @@
 
 .PARAMETER Emulator
   dev only: an x86_64 APK for the Android emulator instead
-  (target\apk\clock-in-<version>-dev-emulator.apk). Not for phones.
+  (target\apk\clock-in-<version>-dev-emulator.apk). Not for phones. Its web
+  code is lowered to Chrome 83, the WebView built into the Android 11
+  emulator image, which can't be updated there (no Play Store).
 
 .DESCRIPTION
   One APK for real phones (arm64-v8a and armeabi-v7a), signed with the
@@ -46,8 +48,11 @@ if (-not (Test-Path (Join-Path $android 'app\tauri.build.gradle.kts'))) {
 
 $version = (Get-Content (Join-Path $root 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json).version
 $env:CLOCKIN_ENV = $Env
+if ($Emulator) { $env:CLOCKIN_WEB_TARGET = 'chrome83' }
 pnpm build
-if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed.' }
+$built = $LASTEXITCODE
+Remove-Item Env:CLOCKIN_WEB_TARGET -ErrorAction SilentlyContinue
+if ($built -ne 0) { throw 'Frontend build failed.' }
 
 # The project URL each .env file names (public; never printed).
 function Get-ProjectUrl([string]$name) {

@@ -21,6 +21,14 @@ const XIAOMI_LINKS: Partial<Record<(typeof XIAOMI_STEPS)[number], PermissionKind
   xiaomiBattery: "xiaomiBattery",
 };
 
+/** Before Android 13 there is no notification permission to allow: only the settings switch. */
+function helpKey(
+  kind: (typeof ITEMS)[number],
+  sdk: number,
+): "onboarding.notificationsHelpSettings" | `onboarding.${(typeof ITEMS)[number]}Help` {
+  return kind === "notifications" && sdk < 33 ? "onboarding.notificationsHelpSettings" : `onboarding.${kind}Help`;
+}
+
 /**
  * Android onboarding (SPEC §8.2): every permission the alarms need, with a
  * live ✓ / ✗ and a button to the phone's own screen that fixes it. Plain
@@ -42,12 +50,12 @@ export function Onboarding({ permissions, permissionsOk, onDone }: OnboardingPro
         <p className="onboarding__intro">{t("onboarding.checking")}</p>
       ) : (
         <ol className="checklist">
-          {ITEMS.map((kind) => (
+          {ITEMS.filter((kind) => !permissions.notApplicable.includes(kind)).map((kind) => (
             <ChecklistItem
               key={kind}
               ok={permissions[kind]}
               title={t(`onboarding.${kind}`)}
-              help={t(`onboarding.${kind}Help`)}
+              help={t(helpKey(kind, permissions.sdk))}
               onFix={() => open(kind)}
             />
           ))}

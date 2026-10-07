@@ -234,6 +234,7 @@ pub fn run() {
             commands::set_theme,
             commands::android_stop_alarm,
             commands::android_diagnostics,
+            commands::android_insets,
             commands::debug_set_clock,
         ])
         .run(tauri::generate_context!())

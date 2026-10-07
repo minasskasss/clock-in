@@ -15,6 +15,8 @@ function status(overrides: Partial<PermissionStatus> = {}): PermissionStatus {
     unusedApps: true,
     oem: "",
     oemDone: false,
+    sdk: 34,
+    notApplicable: [],
     ...overrides,
   };
 }
@@ -67,6 +69,35 @@ describe("Android onboarding checklist", () => {
     expect(screen.queryByRole("button", { name: "Ρύθμιση" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Το έκανα" }));
     expect(callsTo(calls, "android_set_oem_done")).toEqual([{ done: true }]);
+  });
+
+  it("on Android 11 leaves out what doesn't exist there and words notifications for the settings page", async () => {
+    const calls = mockCommands({ android_open_settings: null });
+    const user = userEvent.setup();
+    render(
+      <Onboarding
+        permissions={status({
+          sdk: 30,
+          notApplicable: ["exactAlarms", "fullScreen", "unusedApps"],
+          notifications: false,
+          oem: "xiaomi",
+        })}
+        permissionsOk={false}
+        onDone={() => {}}
+      />,
+    );
+    expect(screen.queryByText("Ξυπνητήρια και υπενθυμίσεις")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ειδοποιήσεις σε πλήρη οθόνη")).not.toBeInTheDocument();
+    expect(screen.queryByText("Να μη σταματά όταν δεν ανοίγεται")).not.toBeInTheDocument();
+    const notifications = screen.getByText("Ειδοποιήσεις").closest("li") as HTMLElement;
+    expect(notifications).toHaveTextContent("ενεργοποιήστε τις ειδοποιήσεις του Clock In");
+    expect(notifications).not.toHaveTextContent("Να επιτρέπεται");
+    expect(screen.getByText("Μπαταρία χωρίς περιορισμούς")).toBeInTheDocument();
+    expect(screen.getByText("Επιπλέον ρυθμίσεις για Xiaomi")).toBeInTheDocument();
+    // ✗ only for notifications and the Xiaomi step, never for what doesn't exist.
+    expect(screen.getAllByLabelText("Λείπει")).toHaveLength(2);
+    await user.click(within(notifications).getByRole("button", { name: "Ρύθμιση" }));
+    expect(callsTo(calls, "android_open_settings")).toEqual([{ kind: "notifications" }]);
   });
 
   it("says it is checking before Android answered", () => {

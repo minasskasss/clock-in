@@ -35,6 +35,24 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Λείπουν οι ρυθμίσεις διακομιστή" })).toBeInTheDocument();
   });
 
+  it("on Android keeps clear of the system bars with Android's own sizes (old WebViews report none)", async () => {
+    window.localStorage.setItem("clockin.onboarding", "done");
+    const calls = mockCommands({
+      app_state: appState({
+        platform: "android",
+        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
+      }),
+      android_insets: { top: 24, right: 0, bottom: 48, left: 0 },
+    });
+    render(<App />);
+    const root = document.documentElement.style;
+    await waitFor(() => expect(root.getPropertyValue("--android-inset-top")).toBe("24px"));
+    expect(root.getPropertyValue("--android-inset-bottom")).toBe("48px");
+    expect(callsTo(calls, "android_insets")).toHaveLength(1);
+    for (const side of ["top", "right", "bottom", "left"]) root.removeProperty(`--android-inset-${side}`);
+    window.localStorage.removeItem("clockin.onboarding");
+  });
+
   it("is Greek only: the menu has no language choice", async () => {
     mockCommands({ app_state: appState({ today: { businessDate: "2026-10-05", clock: "11:42", rows: [] } }) });
     const user = userEvent.setup();

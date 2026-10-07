@@ -61,10 +61,23 @@ export function Diagnostics({ onClose }: { onClose: () => void }) {
       },
     );
     if (view.makerOs) rows.push({ label: t("diagnostics.makerOs"), value: view.makerOs });
+    rows.push({
+      label: t("diagnostics.webView"),
+      value: !view.webViewVersion
+        ? t("diagnostics.webViewUnknown")
+        : view.webViewOk
+          ? view.webViewVersion
+          : t("diagnostics.webViewOld", { version: view.webViewVersion }),
+      bad: !view.webViewOk,
+    });
     rows.push({ label: t("diagnostics.alertMode"), value: t(`alertMode.${view.alertMode}`) });
     if (p) {
       for (const kind of PERMISSIONS) {
-        rows.push({ label: t(`onboarding.${kind}`), value: p[kind] ? "✓" : "✗", bad: !p[kind] });
+        if (p.notApplicable.includes(kind)) {
+          rows.push({ label: t(`onboarding.${kind}`), value: t("diagnostics.notApplicable") });
+        } else {
+          rows.push({ label: t(`onboarding.${kind}`), value: p[kind] ? "✓" : "✗", bad: !p[kind] });
+        }
       }
       rows.push({
         label: t("diagnostics.oem"),

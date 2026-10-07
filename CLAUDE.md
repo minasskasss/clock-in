@@ -135,5 +135,5 @@ Before implementing anything in these areas, check the current official document
 - **All strings go through i18n.** The app is Greek only (owner decision for v1). Every user-facing string lives in the single central file `src/i18n/el.json` (never hard-coded in components), so the wording stays easy to change. There is no English.
 - **Supported platforms:**
   - Windows 10 and 11 (x64);
-  - Android at Tauri 2's minimum SDK or higher, tested on Android 13–16.
+  - Android 8.0 (API 26, the app's `minSdk`) or higher, tested on Android 11 and 13–16. The employer's phone is a Redmi Note 11S with MIUI 13 on Android 11 (API 30). The Android System WebView must be version 91 or newer.
 - **No telemetry, no analytics, no third-party services** beyond Supabase.

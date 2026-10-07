@@ -292,12 +292,15 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 **Onboarding checklist** (plain-language Greek, usable by a non-technical person on a phone call):
 
-- `POST_NOTIFICATIONS`;
-- exact alarms;
-- full-screen intent;
+- notifications: `POST_NOTIFICATIONS` on Android 13+; below that, the app's notifications and its alarm channel switched on (`areNotificationsEnabled`);
+- exact alarms (Android 12+);
+- full-screen intent (Android 14+);
 - battery-optimisation exemption (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`);
+- "Pause app activity if unused" off (Android 12+);
+- Kotlin reports the items that have no setting on the phone's Android version (`notApplicable`, always allowed there); the checklist leaves them out and «Διαγνωστικά» says they don't exist there. On Android 11 those are exact alarms, full screen and the unused-app switch;
 - an OEM note with deep links for Xiaomi, Samsung, Huawei and Oppo autostart/background settings where they exist (see dontkillmyapp.com); Xiaomi gets four steps (autostart, other permissions, battery saver, lock in Recents).
 - After an update (`MY_PACKAGE_REPLACED`), a notification if a required permission is off: Android 14+ installers may switch full-screen intents off on every update.
+- **WebView:** the web build targets Chrome 91 (`vite.config.ts`); below that Android System WebView version the plugin's `load` shows a native Greek dialog on every start with a Play Store button (the web screens may not run at all), and «Διαγνωστικά» shows the version.
 
 **HTTP client:** a minimal HTTPS POST to the RPC endpoint from Kotlin, using the stored publishable key and device secret.
 

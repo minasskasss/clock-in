@@ -1,6 +1,10 @@
 package io.github.minasskasss.clockin.alarm
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.webkit.WebView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -68,6 +72,25 @@ class DoneArgs {
 @TauriPlugin
 class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
     private val context get() = activity.applicationContext
+
+    /**
+     * An Android System WebView older than the app's screens need (often on
+     * phones that don't update it): a native warning each time the app
+     * opens, because those screens themselves may not show.
+     */
+    override fun load(webView: WebView) {
+        super.load(webView)
+        if (!Permissions.webViewTooOld()) return
+        activity.runOnUiThread {
+            val version = Permissions.webView()?.versionName ?: ""
+            AlertDialog.Builder(activity)
+                .setTitle(R.string.clockin_android_webViewOldTitle)
+                .setMessage(activity.getString(R.string.clockin_android_webViewOldBody, version))
+                .setPositiveButton(R.string.clockin_android_webViewOldUpdate) { _, _ -> Permissions.openWebViewStore(activity) }
+                .setNegativeButton(R.string.clockin_android_webViewOldLater, null)
+                .show()
+        }
+    }
 
     /** The plan Rust computed, and this device's alert mode. */
     @Command
@@ -198,6 +221,21 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
         val args = invoke.parseArgs(ServerConfigArgs::class.java)
         Store.get(context).setServerConfig(args.url, args.publishableKey)
         invoke.resolve()
+    }
+
+    /** The status and navigation bars (and cutout) around the app, in CSS pixels. */
+    @Command
+    fun insets(invoke: Invoke) {
+        val result = JSObject()
+        val root = activity.window.decorView
+        val insets = ViewCompat.getRootWindowInsets(root)
+            ?.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+        val density = activity.resources.displayMetrics.density
+        result.put("top", (insets?.top ?: 0) / density)
+        result.put("right", (insets?.right ?: 0) / density)
+        result.put("bottom", (insets?.bottom ?: 0) / density)
+        result.put("left", (insets?.left ?: 0) / density)
+        invoke.resolve(result)
     }
 
     @Command
