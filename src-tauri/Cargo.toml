@@ -45,14 +45,20 @@ windows = { version = "0.62", features = [
     "Win32_System_Variant",
 ] }
 # Window and tray icons at exact sizes (src/window_icon.rs), keep-awake
-# (src/power.rs) and the start-with-Windows entry (src/autostart.rs).
+# (src/power.rs), the start-with-Windows entry (src/autostart.rs) and the
+# dead-key guard (src/keyboard_guard.rs).
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
     "Win32_System_Power",
     "Win32_System_Registry",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target.'cfg(windows)'.dev-dependencies]
+# Tests only: reads the Greek keyboard layout (src/keyboard_guard.rs).
+windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse"] }
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.5"
