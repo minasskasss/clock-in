@@ -7,6 +7,10 @@
   prod - talks to the prod project; only for the employer's phone. Never
          install it on a test phone.
 
+.PARAMETER Emulator
+  dev only: an x86_64 APK for the Android emulator instead
+  (target\apk\clock-in-<version>-dev-emulator.apk). Not for phones.
+
 .DESCRIPTION
   One APK for real phones (arm64-v8a and armeabi-v7a), signed with the
   keystore in C:\dev\clock-in-keys\ (keystore.properties). Copied to
@@ -21,11 +25,14 @@
 
 .EXAMPLE
   .\tools\build-apk.ps1 -Env dev
+  .\tools\build-apk.ps1 -Env dev -Emulator
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('dev', 'prod')][string]$Env
+    [Parameter(Mandatory)][ValidateSet('dev', 'prod')][string]$Env,
+    [switch]$Emulator
 )
 $ErrorActionPreference = 'Stop'
+if ($Emulator -and $Env -ne 'dev') { throw 'The emulator build is dev only.' }
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 $android = Join-Path $root 'src-tauri\gen\android'
@@ -53,7 +60,8 @@ $otherUrl = Get-ProjectUrl $(if ($Env -eq 'dev') { 'prod' } else { 'dev' })
 if (-not $wantUrl) { throw ".env.$Env has no SUPABASE_URL." }
 $latin1 = [Text.Encoding]::GetEncoding(28591)
 
-$abis = [ordered]@{ 'aarch64-linux-android' = 'arm64-v8a'; 'armv7-linux-androideabi' = 'armeabi-v7a' }
+$abis = if ($Emulator) { [ordered]@{ 'x86_64-linux-android' = 'x86_64' } }
+    else { [ordered]@{ 'aarch64-linux-android' = 'arm64-v8a'; 'armv7-linux-androideabi' = 'armeabi-v7a' } }
 foreach ($target in $abis.Keys) {
     & (Join-Path $PSScriptRoot 'android-env.ps1') cargo build --release --package clock-in --manifest-path src-tauri\Cargo.toml --target $target --features tauri/custom-protocol --lib
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed for $target." }
@@ -67,7 +75,7 @@ foreach ($target in $abis.Keys) {
     New-Item -ItemType Directory -Force $jni | Out-Null
     Copy-Item $lib (Join-Path $jni 'libclockin_lib.so') -Force
 }
-Write-Host "Checked: both libraries talk to the $Env project only$(if ($Env -eq 'prod') { ' (no test badge)' })."
+Write-Host "Checked: the libraries talk to the $Env project only$(if ($Env -eq 'prod') { ' (no test badge)' })."
 # No library for other ABIs may be left over from an earlier build.
 Get-ChildItem (Join-Path $android 'app\src\main\jniLibs') -Directory |
     Where-Object { $abis.Values -notcontains $_.Name } |
@@ -75,15 +83,21 @@ Get-ChildItem (Join-Path $android 'app\src\main\jniLibs') -Directory |
 
 Set-Location $android
 $ErrorActionPreference = 'Continue'
-.\gradlew.bat assembleUniversalRelease '-PabiList=arm64-v8a,armeabi-v7a' '-ParchList=arm64,arm' '-PtargetList=aarch64,armv7' `
-    -x rustBuildUniversalRelease -x rustBuildArm64Release -x rustBuildArmRelease --console=plain
+if ($Emulator) {
+    .\gradlew.bat assembleUniversalRelease '-PabiList=x86_64' '-ParchList=x86_64' '-PtargetList=x86_64' `
+        -x rustBuildUniversalRelease -x rustBuildX86_64Release --console=plain
+} else {
+    .\gradlew.bat assembleUniversalRelease '-PabiList=arm64-v8a,armeabi-v7a' '-ParchList=arm64,arm' '-PtargetList=aarch64,armv7' `
+        -x rustBuildUniversalRelease -x rustBuildArm64Release -x rustBuildArmRelease --console=plain
+}
 if ($LASTEXITCODE -ne 0) { throw 'Gradle build failed.' }
 $ErrorActionPreference = 'Stop'
 Set-Location $root
 
 $built = Join-Path $android 'app\build\outputs\apk\universal\release\app-universal-release.apk'
 if (-not (Test-Path $built)) { throw "No signed APK at $built (was the keystore found?)." }
-$name = if ($Env -eq 'dev') { "clock-in-$version-dev.apk" } else { "clock-in-$version.apk" }
+$name = if ($Emulator) { "clock-in-$version-dev-emulator.apk" }
+    elseif ($Env -eq 'dev') { "clock-in-$version-dev.apk" } else { "clock-in-$version.apk" }
 # Prod builds go next to the Windows installers, outside the repo.
 $outDir = if ($Env -eq 'dev') { Join-Path $root 'target\apk' } else { "C:\dev\clock-in-releases\$version-prod" }
 New-Item -ItemType Directory -Force $outDir | Out-Null
