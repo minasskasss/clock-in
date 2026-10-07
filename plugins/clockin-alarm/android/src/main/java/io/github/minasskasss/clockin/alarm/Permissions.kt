@@ -40,9 +40,17 @@ internal object Permissions {
             "fullScreen" to fullScreen,
             "battery" to pm.isIgnoringBatteryOptimizations(context.packageName),
             "unusedApps" to unusedExempt,
-            "oem" to (OEM_BRANDS.firstOrNull { brand.contains(it) } ?: ""),
+            // Redmi and POCO are Xiaomi phones with the same settings.
+            "oem" to (OEM_BRANDS.firstOrNull { brand.contains(it) }
+                ?.let { if (it == "redmi" || it == "poco") "xiaomi" else it } ?: ""),
             "oemDone" to Store.get(context).oemDone(),
         )
+    }
+
+    /** Everything the alarms need is granted (the maker's step is advice; same rule as Rust). */
+    fun allGranted(context: Context): Boolean {
+        val status = status(context)
+        return listOf("notifications", "exactAlarms", "fullScreen", "battery", "unusedApps").all { status[it] == true }
     }
 
     private fun packageUri(context: Context) = Uri.parse("package:" + context.packageName)
@@ -89,6 +97,25 @@ internal object Permissions {
                 listOf(appDetails(context))
             }
             "oem" -> oemIntents() + appDetails(context)
+            // Xiaomi / Redmi / POCO (MIUI 12–14, HyperOS): their own screens,
+            // else the app's page, where the same switches are on MIUI 13+.
+            "xiaomiAutostart" -> listOf(
+                component("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
+                appDetails(context),
+            )
+            "xiaomiPermissions" -> listOf(
+                Intent("miui.intent.action.APP_PERM_EDITOR")
+                    .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                    .putExtra("extra_pkgname", context.packageName),
+                Intent("miui.intent.action.APP_PERM_EDITOR").putExtra("extra_pkgname", context.packageName),
+                appDetails(context),
+            )
+            "xiaomiBattery" -> listOf(
+                component("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")
+                    .putExtra("package_name", context.packageName)
+                    .putExtra("package_label", context.applicationInfo.loadLabel(context.packageManager).toString()),
+                appDetails(context),
+            )
             else -> listOf(appDetails(context))
         }
         for (intent in candidates) {
@@ -106,9 +133,10 @@ internal object Permissions {
      * (dontkillmyapp.com). Samsung's "never sleeping apps" list has no stable
      * link, so Samsung gets the app's own page (Battery → Unrestricted).
      */
+    private fun component(pkg: String, cls: String) = Intent().setComponent(ComponentName(pkg, cls))
+
     private fun oemIntents(): List<Intent> {
         val brand = Build.MANUFACTURER.lowercase()
-        fun component(pkg: String, cls: String) = Intent().setComponent(ComponentName(pkg, cls))
         return when {
             brand.contains("xiaomi") || brand.contains("redmi") || brand.contains("poco") -> listOf(
                 component("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"),
@@ -127,6 +155,37 @@ internal object Permissions {
             else -> emptyList()
         }
     }
+
+    /** A system property, or "" (no secrets: OS version names only). */
+    private fun systemProperty(name: String): String =
+        try {
+            val process = ProcessBuilder("getprop", name).redirectErrorStream(true).start()
+            val value = process.inputStream.bufferedReader().use { it.readText() }.trim()
+            process.waitFor()
+            value
+        } catch (e: Exception) {
+            ""
+        }
+
+    /** The maker's own system and its version: HyperOS, MIUI or One UI, or "". */
+    private fun makerOs(): String {
+        val hyperOs = systemProperty("ro.mi.os.version.incremental")
+        if (hyperOs.isNotEmpty()) return "HyperOS $hyperOs"
+        val miui = systemProperty("ro.miui.ui.version.name")
+        if (miui.isNotEmpty()) return "MIUI $miui (${Build.VERSION.INCREMENTAL})"
+        val oneUi = systemProperty("ro.build.version.oneui").toIntOrNull()
+        if (oneUi != null && oneUi > 0) return "One UI ${oneUi / 10000}.${oneUi / 100 % 100}"
+        return ""
+    }
+
+    /** The phone and its systems, for the diagnostics view. */
+    fun phone(): Map<String, Any> = mapOf(
+        "manufacturer" to Build.MANUFACTURER.replaceFirstChar { it.uppercase() },
+        "model" to Build.MODEL,
+        "androidVersion" to Build.VERSION.RELEASE,
+        "sdk" to Build.VERSION.SDK_INT,
+        "makerOs" to makerOs(),
+    )
 
     /** The phone's own name (e.g. "Galaxy S24 Ultra"), for the device list. */
     fun deviceName(context: Context): String {

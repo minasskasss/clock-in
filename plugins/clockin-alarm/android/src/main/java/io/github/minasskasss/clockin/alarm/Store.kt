@@ -153,6 +153,63 @@ internal class Store private constructor(private val prefs: SharedPreferences) {
         prefs.edit().putInt("notification_requests", notificationRequests() + 1).commit()
     }
 
+    // --- The alarm screen's theme (SPEC §3) ----------------------------------
+
+    /** `auto`, `system`, `light` or `dark`, as chosen in the app. */
+    fun theme(): String = prefs.getString("theme", "auto") ?: "auto"
+
+    /** When the automatic theme is dark, `[start, end)` in epoch ms (computed by Rust). */
+    fun darkWindows(): List<Pair<Long, Long>> {
+        val raw = prefs.getString("dark_windows", null) ?: return emptyList()
+        return try {
+            val a = JSONArray(raw)
+            (0 until a.length()).map { a.getJSONArray(it).let { w -> w.getLong(0) to w.getLong(1) } }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setTheme(theme: String, darkWindows: List<Pair<Long, Long>>) {
+        val a = JSONArray()
+        darkWindows.forEach { (start, end) -> a.put(JSONArray().put(start).put(end)) }
+        prefs.edit().putString("theme", theme).putString("dark_windows", a.toString()).commit()
+    }
+
+    // --- Diagnostics («Διαγνωστικά») ----------------------------------------
+
+    fun recordRefresh(atMs: Long, ok: Boolean) {
+        prefs.edit().putLong("last_refresh_at", atMs).putBoolean("last_refresh_ok", ok).commit()
+    }
+
+    /** When the background refresh last ran, and whether it reached the server. */
+    fun lastRefresh(): Pair<Long, Boolean>? =
+        if (prefs.contains("last_refresh_at")) {
+            prefs.getLong("last_refresh_at", 0) to prefs.getBoolean("last_refresh_ok", false)
+        } else {
+            null
+        }
+
+    /**
+     * An alarm rang at `atMs`: `notification` (posted, screen not seen yet),
+     * `fullScreen`, `opened` (from the notification) or `notificationMode`.
+     */
+    fun recordAlarm(atMs: Long, how: String) {
+        prefs.edit().putLong("last_alarm_at", atMs).putString("last_alarm_how", how).commit()
+    }
+
+    /** The alarm screen opened: by itself (full screen) or from the notification. */
+    fun alarmScreenShown(fullScreen: Boolean) {
+        val how = prefs.getString("last_alarm_how", null) ?: return
+        if (how == "notification" || (fullScreen && how == "opened")) {
+            prefs.edit().putString("last_alarm_how", if (fullScreen) "fullScreen" else "opened").commit()
+        }
+    }
+
+    fun lastAlarm(): Pair<Long, String>? {
+        val how = prefs.getString("last_alarm_how", null) ?: return null
+        return prefs.getLong("last_alarm_at", 0) to how
+    }
+
     // --- Handled alarms -----------------------------------------------------
 
     fun handledKeys(): Set<String> = handled().keys

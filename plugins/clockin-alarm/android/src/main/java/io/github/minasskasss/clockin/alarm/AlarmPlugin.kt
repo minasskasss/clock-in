@@ -5,6 +5,7 @@ import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
+import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 
@@ -17,11 +18,19 @@ class ItemArg {
 }
 
 @InvokeArg
+class WindowArg {
+    var start: Long = 0
+    var end: Long = 0
+}
+
+@InvokeArg
 class SetPlanArgs {
     lateinit var items: Array<ItemArg>
     lateinit var alertMode: String
     var configVersion: Long = 0
     var horizonEnd: String? = null
+    var theme: String = "auto"
+    var darkWindows: Array<WindowArg> = emptyArray()
 }
 
 @InvokeArg
@@ -69,6 +78,7 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
             val store = Store.get(context)
             store.setAlertMode(args.alertMode)
             store.setPlan(Plan(args.configVersion, args.horizonEnd?.let { PlanItem.parseInstantMs(it) }, items))
+            store.setTheme(args.theme, args.darkWindows.map { it.start to it.end })
         }
         Notifications.ensureChannels(context)
         Ring.onPlanChanged(context)
@@ -80,7 +90,49 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun permissionStatus(invoke: Invoke) {
         val result = JSObject()
-        Permissions.status(context).forEach { (k, v) -> result.put(k, v) }
+        val status = Permissions.status(context)
+        status.forEach { (k, v) -> result.put(k, v) }
+        if (listOf("notifications", "exactAlarms", "fullScreen", "battery", "unusedApps").all { status[it] == true }) {
+            Notifications.cancel(context, Notifications.ID_SETUP)
+        }
+        invoke.resolve(result)
+    }
+
+    /** The ring-mode alarm in progress, for the «Σταμάτημα» bar on Today. */
+    @Command
+    fun alarmStatus(invoke: Invoke) {
+        val active = Store.get(context).active()
+        val result = JSObject()
+        result.put("active", active != null)
+        result.put("ringing", RingService.running?.isRinging == true)
+        val names = { kind: String -> JSArray().apply { active?.items?.filter { it.kind == kind }?.map { it.name }?.distinct()?.forEach { put(it) } } }
+        result.put("checkIn", names("in"))
+        result.put("checkOut", names("out"))
+        invoke.resolve(result)
+    }
+
+    /** «Σταμάτημα» on Today: the same as on the alarm screen (marks nobody). */
+    @Command
+    fun stopAlarm(invoke: Invoke) {
+        Ring.stop(context)
+        invoke.resolve()
+    }
+
+    /** The «Διαγνωστικά» view: the phone, the background refresh and the alarms. No secrets. */
+    @Command
+    fun diagnostics(invoke: Invoke) {
+        val store = Store.get(context)
+        val result = JSObject()
+        Permissions.phone().forEach { (k, v) -> result.put(k, v) }
+        store.lastRefresh()?.let { (at, ok) ->
+            result.put("lastRefreshAt", at)
+            result.put("lastRefreshOk", ok)
+        }
+        AlarmScheduler.nextAt(context)?.let { result.put("nextAlarmAt", it) }
+        store.lastAlarm()?.let { (at, how) ->
+            result.put("lastAlarmAt", at)
+            result.put("lastAlarmHow", how)
+        }
         invoke.resolve(result)
     }
 

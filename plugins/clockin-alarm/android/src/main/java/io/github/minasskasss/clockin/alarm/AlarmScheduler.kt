@@ -50,6 +50,18 @@ internal object AlarmScheduler {
         }
     }
 
+    /** The next alarm or re-ring this device will ring for, if any (diagnostics). */
+    fun nextAt(context: Context): Long? {
+        val store = Store.get(context)
+        val now = System.currentTimeMillis()
+        val handled = store.handledKeys()
+        val next = store.plan().items
+            .filter { it.firesAtMs >= now && it.key !in handled }
+            .minOfOrNull { it.firesAtMs }
+        val rering = store.active()?.reringAtMs
+        return listOfNotNull(next, rering).minOrNull()
+    }
+
     /**
      * Cancels the alarms scheduled last time and schedules every plan event
      * in the next 48 hours that this device hasn't handled, plus the re-ring

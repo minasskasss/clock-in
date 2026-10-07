@@ -57,6 +57,22 @@ internal object Ring {
     }
 
     /**
+     * The ringing or silent notification was swiped away (Android 14+ allows
+     * that unless the phone is locked): post it again while the cycle lasts,
+     * so «Σταμάτημα» is always reachable.
+     */
+    fun repost(context: Context) {
+        val service = RingService.running
+        if (service != null && service.isRinging) {
+            service.refreshNotification()
+            return
+        }
+        val active = Store.get(context).active() ?: return
+        val rering = active.reringAtMs ?: return
+        Notifications.showSilent(context, active.items, hhmm(rering))
+    }
+
+    /**
      * The plan changed (a mark on this phone, a schedule edit): names whose
      * alarm is no longer in the plan at the same time are dropped at once,
      * and the cycle ends when nobody is left.
@@ -124,8 +140,11 @@ class RingService : Service() {
     private var player: MediaPlayer? = null
     private var vibrating = false
     private var wakeLock: PowerManager.WakeLock? = null
-    /** Main thread only. */
+    /** Written on the main thread only. */
+    @Volatile
     private var ringing = false
+
+    internal val isRinging: Boolean get() = ringing
     private val silence = Runnable { goSilent() }
     private val recheckTick = Runnable { worker.execute { recheck() } }
 
@@ -239,6 +258,8 @@ class RingService : Service() {
             return
         }
         ringing = true
+        // "Notification" until the alarm screen reports how it was shown.
+        Store.get(this).recordAlarm(System.currentTimeMillis(), "notification")
         enterForeground(Notifications.ID_RINGING, Notifications.ringing(this, active.items))
         Notifications.cancel(this, Notifications.ID_CHECKING)
         Notifications.cancel(this, Notifications.ID_SILENT)

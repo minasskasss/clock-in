@@ -1,6 +1,7 @@
 package io.github.minasskasss.clockin.alarm
 
 import android.app.Activity
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
@@ -15,14 +16,22 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.view.WindowCompat
 
 /**
  * The full-screen alarm (SPEC §7.3): the names and one large «Σταμάτημα»,
  * also over the lock screen. Native views, so it opens fast and works
- * before the phone's first unlock. Colours follow the phone's dark mode,
- * with the app's warm palettes (src/styles/tokens.css).
+ * before the phone's first unlock. Colours follow the theme chosen in the
+ * app (Αυτόματο, Σύστημα, Φωτεινό, Σκοτεινό), with the app's warm palettes
+ * (src/styles/tokens.css).
  */
 class AlarmActivity : Activity() {
+    companion object {
+        const val EXTRA_VIA = "via"
+        const val VIA_FULL_SCREEN = "fullScreen"
+        const val VIA_TAP = "tap"
+    }
+
     private lateinit var time: TextView
     private lateinit var checkInTitle: TextView
     private lateinit var checkInNames: TextView
@@ -31,8 +40,28 @@ class AlarmActivity : Activity() {
     private lateinit var silent: TextView
     private val listener: () -> Unit = { render() }
 
-    private val dark: Boolean
+    private val systemDark: Boolean
         get() = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+    /**
+     * The app's theme choice. "Αυτόματο" uses the dark periods Rust computed
+     * with the core's rule (dark from 21:00 until the business day ends);
+     * without them yet, the phone's own setting.
+     */
+    private val dark: Boolean
+        get() {
+            val store = Store.get(this)
+            return when (store.theme()) {
+                "light" -> false
+                "dark" -> true
+                "auto" -> {
+                    val windows = store.darkWindows()
+                    val now = System.currentTimeMillis()
+                    if (windows.isEmpty()) systemDark else windows.any { (start, end) -> now >= start && now < end }
+                }
+                else -> systemDark
+            }
+        }
 
     private fun dp(value: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics).toInt()
@@ -47,7 +76,9 @@ class AlarmActivity : Activity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        noteHowShown(intent)
 
+        val dark = this.dark
         val bg = Color.parseColor(if (dark) "#17120F" else "#F6EFE6")
         val textColor = Color.parseColor(if (dark) "#F4EBE1" else "#2A211B")
         val mutedColor = Color.parseColor(if (dark) "#B9A999" else "#6E6056")
@@ -55,6 +86,11 @@ class AlarmActivity : Activity() {
         val accentText = Color.parseColor(if (dark) "#1C1410" else "#FFFAF4")
         window.decorView.setBackgroundColor(bg)
         window.statusBarColorCompat(bg)
+        // Status and navigation bar icons readable on the chosen theme.
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
 
         fun label(sizeSp: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
@@ -114,6 +150,19 @@ class AlarmActivity : Activity() {
         }
         setContentView(scroll)
         render()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        noteHowShown(intent)
+    }
+
+    /** For the diagnostics: opened by the system (full screen) or from the notification. */
+    private fun noteHowShown(intent: Intent?) {
+        when (intent?.getStringExtra(EXTRA_VIA)) {
+            VIA_FULL_SCREEN -> Store.get(this).alarmScreenShown(fullScreen = true)
+            VIA_TAP -> Store.get(this).alarmScreenShown(fullScreen = false)
+        }
     }
 
     private fun android.view.Window.statusBarColorCompat(color: Int) {

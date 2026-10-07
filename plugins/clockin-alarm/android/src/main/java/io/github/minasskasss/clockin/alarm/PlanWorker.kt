@@ -69,10 +69,14 @@ class PlanWorker(context: Context, params: WorkerParameters) : Worker(context, p
         val version = when (val answer = api.getVersion(secret)) {
             is ServerApi.Answer.Ok -> answer.body
             is ServerApi.Answer.Rejected -> {
+                store.recordRefresh(System.currentTimeMillis(), false)
                 if (answer.unpaired) synchronized(Store.LOCK) { store.clearPlan() }
                 return
             }
-            ServerApi.Answer.Unreachable -> return
+            ServerApi.Answer.Unreachable -> {
+                store.recordRefresh(System.currentTimeMillis(), false)
+                return
+            }
         }
         val planVersion = version.optLong("plan_config_version", 0)
         val horizon = version.optString("plan_horizon_end", "").takeIf { it.isNotEmpty() && it != "null" }
@@ -85,7 +89,11 @@ class PlanWorker(context: Context, params: WorkerParameters) : Worker(context, p
         val newer = planVersion > stored.configVersion ||
             (planVersion == stored.configVersion && horizon != null && horizon > (stored.horizonEndMs ?: 0))
         if (newer) {
-            val plan = (api.getPlan(secret) as? ServerApi.Answer.Ok)?.body ?: return
+            val plan = (api.getPlan(secret) as? ServerApi.Answer.Ok)?.body
+            if (plan == null) {
+                store.recordRefresh(System.currentTimeMillis(), false)
+                return
+            }
             val list = plan.optJSONArray("items") ?: return
             val items = (0 until list.length()).mapNotNull { PlanItem.fromJson(list.getJSONObject(it)) }
             val planHorizon = plan.optString("horizon_end", "").let { PlanItem.parseInstantMs(it) }
@@ -96,6 +104,7 @@ class PlanWorker(context: Context, params: WorkerParameters) : Worker(context, p
         }
 
         val now = System.currentTimeMillis()
+        store.recordRefresh(now, true)
         if (horizon == null || horizon < now + HORIZON_WARNING_MS) {
             Notifications.showHorizonShort(context)
         } else {

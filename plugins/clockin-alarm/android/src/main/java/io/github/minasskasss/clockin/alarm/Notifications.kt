@@ -22,6 +22,7 @@ internal object Notifications {
     const val ID_RINGING = 1002
     const val ID_SILENT = 1003
     const val ID_HORIZON = 1004
+    const val ID_SETUP = 1005
     /** Notification-mode alarms use their minute as id, above this. */
     private const val ID_NOTIFY_BASE = 2000
 
@@ -71,15 +72,26 @@ internal object Notifications {
 
     fun openAppPendingIntent(context: Context): PendingIntent? = openAppIntent(context)
 
-    private fun alarmScreenIntent(context: Context): PendingIntent {
+    /**
+     * The alarm screen, opened by the system (full screen) or by a tap on
+     * the notification; `via` tells them apart for the diagnostics.
+     */
+    private fun alarmScreenIntent(context: Context, fullScreen: Boolean): PendingIntent {
         val intent = Intent(context, AlarmActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
-        return PendingIntent.getActivity(context, 1, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            .putExtra(AlarmActivity.EXTRA_VIA, if (fullScreen) AlarmActivity.VIA_FULL_SCREEN else AlarmActivity.VIA_TAP)
+        return PendingIntent.getActivity(context, if (fullScreen) 3 else 1, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     private fun stopIntent(context: Context): PendingIntent {
         val intent = Intent(context, StopReceiver::class.java).setAction(StopReceiver.ACTION_STOP)
         return PendingIntent.getBroadcast(context, 2, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** Swiped away (allowed since Android 14): post it again, so «Σταμάτημα» is always there. */
+    private fun repostIntent(context: Context): PendingIntent {
+        val intent = Intent(context, StopReceiver::class.java).setAction(StopReceiver.ACTION_REPOST)
+        return PendingIntent.getBroadcast(context, 4, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     /** "Άφιξη: …" and "Αποχώρηση: …" lines for these alarms. */
@@ -102,7 +114,15 @@ internal object Notifications {
             .setSilent(true)
             .build()
 
-    /** Ring mode: the full-screen alarm (heads-up while the phone is in use). */
+    /**
+     * Ring mode: the full-screen alarm (heads-up while the phone is in use).
+     *
+     * Never `setSilent`: Android's SystemUI refuses the full-screen intent of
+     * a "silent" notification, and NotificationCompat's silent mode also puts
+     * it in a group whose alerts are suppressed, which is refused too
+     * (`FullScreenIntentDecisionProvider`). The channel itself has no sound;
+     * the service plays the alarm. Updates (names changing) don't alert again.
+     */
     fun ringing(context: Context, items: List<PlanItem>): Notification {
         val text = nameLines(context, items)
         return NotificationCompat.Builder(context, CHANNEL_ALARM)
@@ -114,9 +134,10 @@ internal object Notifications {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
-            .setSilent(true)
-            .setContentIntent(alarmScreenIntent(context))
-            .setFullScreenIntent(alarmScreenIntent(context), true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(alarmScreenIntent(context, fullScreen = false))
+            .setFullScreenIntent(alarmScreenIntent(context, fullScreen = true), true)
+            .setDeleteIntent(repostIntent(context))
             .addAction(0, context.getString(R.string.clockin_alarm_stop), stopIntent(context))
             .build()
     }
@@ -133,7 +154,8 @@ internal object Notifications {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setSilent(true)
-            .setContentIntent(alarmScreenIntent(context))
+            .setContentIntent(alarmScreenIntent(context, fullScreen = false))
+            .setDeleteIntent(repostIntent(context))
             .addAction(0, context.getString(R.string.clockin_alarm_stop), stopIntent(context))
             .build()
         notify(context, ID_SILENT, notification)
@@ -177,6 +199,24 @@ internal object Notifications {
             .setContentIntent(openAppIntent(context))
             .build()
         notify(context, ID_HORIZON, notification)
+    }
+
+    /**
+     * After an update: a permission the alarms need is off (Android 14+
+     * installers may switch full-screen alarms off on every update).
+     */
+    fun showSetupNeeded(context: Context) {
+        val body = context.getString(R.string.clockin_android_setupBody)
+        val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+            .setSmallIcon(R.drawable.clockin_notification)
+            .setContentTitle(context.getString(R.string.clockin_android_setupTitle))
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent(context))
+            .build()
+        notify(context, ID_SETUP, notification)
     }
 
     fun cancel(context: Context, id: Int) {

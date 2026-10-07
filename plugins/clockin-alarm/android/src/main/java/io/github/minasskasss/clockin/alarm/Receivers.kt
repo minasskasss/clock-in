@@ -85,20 +85,30 @@ class AlarmReceiver : BroadcastReceiver() {
             store.plan().items.filter { it.firesAtMs == at && it.key !in handled }
         }
         val due = Checker.stillDue(context, candidates)
-        if (due.isNotEmpty()) Notifications.showReminder(context, due, at / 60_000L)
+        if (due.isNotEmpty()) {
+            store.recordAlarm(System.currentTimeMillis(), "notificationMode")
+            Notifications.showReminder(context, due, at / 60_000L)
+        }
         synchronized(Store.LOCK) { store.markHandled(candidates, System.currentTimeMillis()) }
         AlarmScheduler.reschedule(context)
     }
 }
 
-/** «Σταμάτημα» on the ringing or silent notification. */
+/**
+ * «Σταμάτημα» on the ringing or silent notification, and the same
+ * notifications swiped away (they are posted again while the cycle lasts).
+ */
 class StopReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_STOP = "io.github.minasskasss.clockin.alarm.STOP"
+        const val ACTION_REPOST = "io.github.minasskasss.clockin.alarm.REPOST"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == ACTION_STOP) Ring.stop(context)
+        when (intent.action) {
+            ACTION_STOP -> Ring.stop(context)
+            ACTION_REPOST -> Ring.repost(context)
+        }
     }
 }
 
@@ -113,6 +123,20 @@ class SystemReceiver : BroadcastReceiver() {
         // isn't readable before the first unlock after a reboot.
         if (intent.action != Intent.ACTION_LOCKED_BOOT_COMPLETED) {
             PlanWorker.ensurePeriodic(context)
+        }
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            // Android 14+ installers may switch full-screen alarms off on
+            // every update: say so at once, not only when the app is opened.
+            // A few seconds' wait lets the installer's change land first.
+            val pending = goAsync()
+            Thread {
+                try {
+                    Thread.sleep(3_000)
+                    if (!Permissions.allGranted(context)) Notifications.showSetupNeeded(context)
+                } finally {
+                    pending.finish()
+                }
+            }.start()
         }
     }
 }
