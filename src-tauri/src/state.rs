@@ -12,9 +12,11 @@ use crate::error::CmdError;
 use crate::profile::Profile;
 use crate::secrets::SecretStore;
 use crate::views;
+#[cfg(desktop)]
+use clockin_core::AlarmKey;
 use clockin_core::{
-    AlarmKey, MarkKind, Snapshot, admin_idle_expired, check_passphrase, is_valid_quit_code,
-    lockout_until, normalize_passphrase, same_passphrase, seconds_until,
+    MarkKind, Snapshot, admin_idle_expired, check_passphrase, is_valid_quit_code, lockout_until,
+    normalize_passphrase, same_passphrase, seconds_until,
 };
 use clockin_sync::{
     Api, ApiError, DeviceSecret, MarkRequest, Pairing as ServerPairing, Platform, QuitCode,
@@ -36,12 +38,17 @@ const SECRET_DEVICE: &str = "device-secret";
 const SECRET_STORE_KEY: &str = "store-key";
 const SETTING_LOCKOUT_UNTIL: &str = "lockout_until";
 /// Alarms this device already rang and that were stopped or ended.
+#[cfg(desktop)]
 const SETTING_ALARMS_HANDLED: &str = "alarms_handled";
+/// Android: ring or notification (SPEC §8.2), per device.
+const SETTING_ALERT_MODE: &str = "alert_mode";
+const SETTING_THEME: &str = "theme";
 const DB_FILE: &str = "local.db";
 /// How long an admin call waits for the sync round that shows its result.
 const SYNC_WAIT: Duration = Duration::from_secs(10);
 /// How long an alarm about to ring waits for fresh marks (ARCHITECTURE §9:
 /// local state at most a few seconds old; offline it rings anyway).
+#[cfg(desktop)]
 const ALARM_SYNC_WAIT: Duration = Duration::from_secs(3);
 
 #[cfg(target_os = "android")]
@@ -138,6 +145,53 @@ pub struct AppState {
     pub alarm_wake: Notify,
     /// Windows output muted, at zero or missing (the banner).
     sound_off: AtomicBool,
+    /// The name suggested on the first-run screens.
+    default_device_name: RwLock<String>,
+}
+
+/// How an Android device alerts (SPEC §7.3, §7.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AlertMode {
+    /// Full-screen alarm, looping sound, repeats until Stop.
+    Ring,
+    /// One notification with the standard sound.
+    Notification,
+}
+
+impl AlertMode {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ring => "ring",
+            Self::Notification => "notification",
+        }
+    }
+}
+
+/// This device's theme choice (SPEC §3). The webview applies it itself;
+/// Android's native alarm screen gets it through the plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemePreference {
+    /// Dark from 21:00 until the business day ends (`clockin-core::auto_theme_is_dark`).
+    Auto,
+    /// The phone's or PC's own light/dark setting.
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemePreference {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
+        }
+    }
 }
 
 /// Where the app is.
@@ -191,6 +245,7 @@ impl AppState {
             .device_setting(SETTING_LOCKOUT_UNTIL)?
             .and_then(|s| s.parse().ok());
         let secret = secrets.get(SECRET_DEVICE)?.map(DeviceSecret::new);
+        let default_device_name = RwLock::new(profile.default_device_name());
         let state = Self {
             clock: Clock::default(),
             profile,
@@ -207,6 +262,7 @@ impl AppState {
             }),
             alarm_wake: Notify::new(),
             sound_off: AtomicBool::new(false),
+            default_device_name,
         };
         Ok((state, secret))
     }
@@ -225,6 +281,86 @@ impl AppState {
     #[must_use]
     pub fn profile(&self) -> &Profile {
         &self.profile
+    }
+
+    /// The device name the first-run screens suggest.
+    #[must_use]
+    pub fn default_device_name(&self) -> String {
+        self.default_device_name
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Android: the phone's own name instead of the computer name.
+    #[cfg(target_os = "android")]
+    pub fn set_default_device_name(&self, name: &str) {
+        let name: String = name.trim().chars().take(60).collect();
+        if !name.is_empty() {
+            *self
+                .default_device_name
+                .write()
+                .unwrap_or_else(PoisonError::into_inner) = name;
+        }
+    }
+
+    /// This device's alert mode (Android, SPEC §8.2); Ring by default.
+    #[cfg(any(target_os = "android", test))]
+    #[must_use]
+    pub fn alert_mode(&self) -> AlertMode {
+        match lock(&self.ui_store)
+            .device_setting(SETTING_ALERT_MODE)
+            .ok()
+            .flatten()
+            .as_deref()
+        {
+            Some("notification") => AlertMode::Notification,
+            _ => AlertMode::Ring,
+        }
+    }
+
+    /// # Errors
+    ///
+    /// If the local database can't be written.
+    pub fn set_alert_mode(&self, mode: AlertMode) -> Result<(), CmdError> {
+        lock(&self.ui_store).set_device_setting(
+            SETTING_ALERT_MODE,
+            mode.as_str(),
+            Timestamp::now(),
+        )?;
+        Ok(())
+    }
+
+    /// This device's theme choice, as the UI last reported it; Auto by default.
+    #[cfg(any(target_os = "android", test))]
+    #[must_use]
+    pub fn theme(&self) -> ThemePreference {
+        match lock(&self.ui_store)
+            .device_setting(SETTING_THEME)
+            .ok()
+            .flatten()
+            .as_deref()
+        {
+            Some("system") => ThemePreference::System,
+            Some("light") => ThemePreference::Light,
+            Some("dark") => ThemePreference::Dark,
+            _ => ThemePreference::Auto,
+        }
+    }
+
+    /// # Errors
+    ///
+    /// If the local database can't be written.
+    pub fn set_theme(&self, theme: ThemePreference) -> Result<(), CmdError> {
+        lock(&self.ui_store).set_device_setting(SETTING_THEME, theme.as_str(), Timestamp::now())?;
+        Ok(())
+    }
+
+    /// The server `config_version` of the last snapshot.
+    #[cfg(any(target_os = "android", test))]
+    #[must_use]
+    pub fn config_version(&self) -> Option<i64> {
+        self.with_snapshot(|s| s.map(|s| s.config_version))
     }
 
     fn pairing(&self) -> Result<Pairing, CmdError> {
@@ -761,6 +897,7 @@ impl AppState {
     /// compared on this device so it works offline. Before a quit code is
     /// known (not paired yet, or never synced) there is nothing to protect
     /// and any answer quits.
+    #[cfg(desktop)]
     #[must_use]
     pub fn quit_allowed(&self, typed: &str) -> bool {
         self.current_quit_code()
@@ -775,12 +912,14 @@ impl AppState {
 
     /// The "Start with Windows" setting; on (the default, SPEC §4.4) until
     /// the first sync.
+    #[cfg(desktop)]
     #[must_use]
     pub fn autostart_wanted(&self) -> bool {
         self.with_snapshot(|s| s.is_none_or(|s| s.settings.autostart))
     }
 
     /// The alarms this device already rang and that were stopped or ended.
+    #[cfg(desktop)]
     #[must_use]
     pub fn handled_alarms(&self) -> Vec<AlarmKey> {
         lock(&self.ui_store)
@@ -791,6 +930,7 @@ impl AppState {
             .unwrap_or_default()
     }
 
+    #[cfg(desktop)]
     pub fn save_handled_alarms(&self, keys: &[AlarmKey]) {
         let Ok(json) = serde_json::to_string(keys) else {
             return;
@@ -804,6 +944,7 @@ impl AppState {
 
     /// Before an alarm rings: one sync round for the latest marks, at most a
     /// few seconds (offline it gives up and the alarm rings: fail loud).
+    #[cfg(desktop)]
     pub async fn refresh_for_alarm(&self) {
         if let Ok(pairing) = self.pairing() {
             let ticket = pairing.sync.request();
@@ -1004,6 +1145,30 @@ mod tests {
             same,
             Err(CmdError::invalid("passphrase", "same_as_current"))
         );
+        drop(state);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_alert_mode_and_theme_keep_their_defaults_until_changed_and_survive_a_restart() {
+        let dir = temp_dir();
+        let secrets = || -> Box<dyn SecretStore> {
+            let s = MemorySecrets::default();
+            s.set(SECRET_STORE_KEY, &"cd".repeat(32)).unwrap();
+            Box::new(s)
+        };
+        let (state, _) = AppState::open(Profile::default(), &dir, secrets(), None).unwrap();
+        assert_eq!(state.alert_mode(), AlertMode::Ring);
+        assert_eq!(state.theme(), ThemePreference::Auto);
+        state.set_alert_mode(AlertMode::Notification).unwrap();
+        state.set_theme(ThemePreference::Dark).unwrap();
+        assert_eq!(state.alert_mode(), AlertMode::Notification);
+        drop(state);
+        let (state, _) = AppState::open(Profile::default(), &dir, secrets(), None).unwrap();
+        assert_eq!(state.alert_mode(), AlertMode::Notification);
+        assert_eq!(state.theme(), ThemePreference::Dark);
+        assert_eq!(state.config_version(), None);
+        assert!(!state.default_device_name().is_empty());
         drop(state);
         std::fs::remove_dir_all(&dir).unwrap();
     }

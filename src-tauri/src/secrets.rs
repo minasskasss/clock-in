@@ -3,7 +3,7 @@
 //!
 //! - Windows: Windows Credential Manager (DPAPI, user-scoped), as "generic
 //!   credentials" with Local persistence (this computer only).
-//! - Android: Phase 5 adds a Keystore-backed store through the alarm plugin.
+//! - Android: an AES key in Android Keystore, through the alarm plugin.
 //! - Other desktops (Linux CI, development only): files in the app's data
 //!   folder. Not a supported platform and not protected.
 //!
@@ -90,6 +90,58 @@ mod windows {
                 Ok(()) | Err(Error::NoEntry) => Ok(()),
                 Err(e) => Err(SecretError(e.to_string())),
             }
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+pub use android::KeystoreSecrets as PlatformSecrets;
+
+#[cfg(target_os = "android")]
+mod android {
+    use super::{SecretError, SecretStore};
+    use tauri::{AppHandle, Manager, Wry};
+    use tauri_plugin_clockin_alarm::AlarmBridge;
+
+    /// Android Keystore through the alarm plugin (ARCHITECTURE §5.7): Kotlin
+    /// encrypts with a Keystore AES key and keeps the result in app-private
+    /// storage, where its background code reads the device secret too.
+    ///
+    /// Each call waits for the Android main thread, so it must not be made
+    /// on that thread (see `crate::android`).
+    pub struct KeystoreSecrets {
+        app: AppHandle,
+    }
+
+    impl KeystoreSecrets {
+        #[must_use]
+        pub fn new(app: AppHandle) -> Self {
+            Self { app }
+        }
+
+        fn with<T>(
+            &self,
+            call: impl FnOnce(&AlarmBridge<Wry>) -> Result<T, tauri_plugin_clockin_alarm::BridgeError>,
+        ) -> Result<T, SecretError> {
+            let bridge = self
+                .app
+                .try_state::<AlarmBridge<Wry>>()
+                .ok_or_else(|| SecretError("the alarm plugin is not registered".into()))?;
+            call(&bridge).map_err(|e| SecretError(e.to_string()))
+        }
+    }
+
+    impl SecretStore for KeystoreSecrets {
+        fn get(&self, name: &str) -> Result<Option<String>, SecretError> {
+            self.with(|b| b.secret_get(name))
+        }
+
+        fn set(&self, name: &str, value: &str) -> Result<(), SecretError> {
+            self.with(|b| b.secret_set(name, value))
+        }
+
+        fn delete(&self, name: &str) -> Result<(), SecretError> {
+            self.with(|b| b.secret_delete(name))
         }
     }
 }

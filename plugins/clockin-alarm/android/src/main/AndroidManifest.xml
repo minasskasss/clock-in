@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Clock In alarm plugin (ARCHITECTURE §10). Merged into the app's manifest.
+  Version-specific choices are logged in docs/DECISIONS.md (Phase 5).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Exact alarms: granted at install on Android 13+, cannot be revoked. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Android 12: the user-grantable one (granted by default there). -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14+: the ringing service's type; allowed for apps holding an exact-alarm permission. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <!-- Android 10–13: the ringing service runs as media playback. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <application>
+        <!-- Rings an alarm event: started from the exact alarm. -->
+        <service
+            android:name=".RingService"
+            android:directBootAware="true"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted|mediaPlayback" />
+
+        <!-- The full-screen alarm, also over the lock screen. -->
+        <activity
+            android:name=".AlarmActivity"
+            android:directBootAware="true"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="io.github.minasskasss.clockin.alarm"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:turnScreenOn="true" />
+
+        <!-- Exact alarms and re-rings. -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
+        <!-- «Σταμάτημα» on a notification. -->
+        <receiver
+            android:name=".StopReceiver"
+            android:directBootAware="true"
+            android:exported="false" />
+
+        <!-- Only reschedules; never starts a foreground service. -->
+        <receiver
+            android:name=".SystemReceiver"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

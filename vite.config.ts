@@ -23,7 +23,11 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
     // Tauri uses Chromium (WebView2) on Windows and the system WebView on Android.
-    target: "es2022",
+    // Chrome 91 is the oldest Android System WebView the app supports; the
+    // Kotlin plugin warns below it (`Permissions.MIN_WEBVIEW`, DECISIONS).
+    // The emulator-only test APK (`tools/build-apk.ps1 -Emulator`) lowers it to
+    // the Android 11 emulator image's built-in WebView; never phone or prod builds.
+    target: ["es2022", process.env.CLOCKIN_WEB_TARGET ?? "chrome91"],
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
   test: {

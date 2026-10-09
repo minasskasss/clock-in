@@ -91,6 +91,39 @@ describe("Settings", () => {
     ]);
   });
 
+  it("hides «Άνοιγμα με την εκκίνηση των Windows» on Android and saves the shop PC's value unchanged", async () => {
+    window.localStorage.setItem("clockin.onboarding", "done");
+    const calls = mockCommands({
+      app_state: appState({
+        adminUnlocked: true,
+        platform: "android",
+        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
+      }),
+      admin_view: adminView({ settings: { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true } }),
+      settings_save: null,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Ρυθμίσεις" }));
+    await user.click(await screen.findByRole("tab", { name: "Ειδοποιήσεις" }));
+    expect(screen.queryByLabelText("Άνοιγμα με την εκκίνηση των Windows")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Αποθήκευση" }));
+    expect(await screen.findByText("Αποθηκεύτηκε.")).toBeInTheDocument();
+    expect(callsTo(calls, "settings_save")).toEqual([
+      { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true, quitCode: null },
+    ]);
+    window.localStorage.removeItem("clockin.onboarding");
+  });
+
+  it("shows «Άνοιγμα με την εκκίνηση των Windows» on Windows", async () => {
+    mockCommands({ app_state: appState({ adminUnlocked: true }), admin_view: adminView() });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Ρυθμίσεις" }));
+    await user.click(await screen.findByRole("tab", { name: "Ειδοποιήσεις" }));
+    expect(screen.getByLabelText("Άνοιγμα με την εκκίνηση των Windows")).toBeChecked();
+  });
+
   it("shows and reads one-off change dates as dd/mm/yyyy, sending ISO to Rust", async () => {
     const calls = mockCommands({
       app_state: appState({ adminUnlocked: true }),

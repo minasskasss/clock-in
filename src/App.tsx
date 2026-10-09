@@ -5,25 +5,61 @@ import "./App.css";
 import { api } from "./api";
 import { Background } from "./components/Background";
 import { Brand } from "./components/Brand";
+import { Diagnostics } from "./components/Diagnostics";
 import { FirstRun } from "./components/FirstRun";
+import { Onboarding } from "./components/Onboarding";
 import { QuitDialog } from "./components/QuitDialog";
 import { QuickMenu } from "./components/QuickMenu";
 import { Today } from "./components/Today";
 import { Unlock } from "./components/Unlock";
 import { Settings } from "./settings/Settings";
+import { readPreference, writePreference } from "./storage";
 import { useTheme } from "./theme/useTheme";
 import { useAppState } from "./useAppState";
 
 /** Sent by Rust when Quit is chosen in the tray (src-tauri/src/tray.rs). */
 export const QUIT_REQUESTED = "quit-requested";
 
+/** Android: the onboarding checklist was finished or put off once on this phone. */
+const ONBOARDING_KEY = "clockin.onboarding";
+
 export default function App() {
   const { t } = useTranslation();
   const { state, failed, refresh } = useAppState();
   const [theme, setTheme] = useTheme(state?.autoDark ?? null);
   const [screen, setScreen] = useState<"today" | "settings">("today");
+  // Android: «Διαγνωστικά» from the menu, over any screen.
+  const [diagnostics, setDiagnostics] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [quitting, setQuitting] = useState(false);
+  // Android: the checklist opens by itself after pairing, until finished or
+  // put off once; later it is in the menu and behind the Today banner.
+  const [onboarding, setOnboarding] = useState(() => readPreference(ONBOARDING_KEY) !== "done");
+
+  // `data-platform` on <html> lets the CSS give Android phones their own sizes.
+  const platform = state?.platform;
+  useEffect(() => {
+    if (platform) document.documentElement.dataset.platform = platform;
+  }, [platform]);
+
+  // Android draws edge to edge, and older WebViews report no safe-area
+  // insets: the bars' sizes come from Android too (App.css uses the larger).
+  useEffect(() => {
+    if (platform !== "android") return;
+    const apply = () =>
+      void api.androidInsets().then(
+        (insets) => {
+          if (!insets) return;
+          for (const side of ["top", "right", "bottom", "left"] as const) {
+            document.documentElement.style.setProperty(`--android-inset-${side}`, `${insets[side]}px`);
+          }
+        },
+        () => {},
+      );
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [platform]);
 
   // Tray → Quit (Rust shows this window first, then asks for the quit code).
   useEffect(() => {
@@ -40,6 +76,12 @@ export default function App() {
   }, []);
 
   const paired = state?.phase === "paired";
+  const android = state?.android ?? null;
+  const showOnboarding = paired && android !== null && onboarding;
+  const finishOnboarding = () => {
+    writePreference(ONBOARDING_KEY, "done");
+    setOnboarding(false);
+  };
   // Settings show only while unlocked: idle time or unpairing locks them.
   const inSettings = paired && screen === "settings" && state.adminUnlocked;
 
@@ -55,7 +97,9 @@ export default function App() {
   };
 
   let main;
-  if (!state) {
+  if (diagnostics && state?.platform === "android") {
+    main = <Diagnostics onClose={() => setDiagnostics(false)} />;
+  } else if (!state) {
     main = <p className="app__message">{failed ? t("app.coreFailed") : t("app.loading")}</p>;
   } else if (state.phase === "not_configured") {
     main = (
@@ -75,10 +119,30 @@ export default function App() {
         }}
       />
     );
+  } else if (showOnboarding) {
+    main = <Onboarding permissions={android.permissions} permissionsOk={android.permissionsOk} onDone={finishOnboarding} />;
   } else if (inSettings) {
-    main = <Settings dataVersion={state.dataVersion} lockoutRemainingS={state.lockoutRemainingS} onExit={exitSettings} />;
+    main = (
+      <Settings
+        dataVersion={state.dataVersion}
+        lockoutRemainingS={state.lockoutRemainingS}
+        platform={state.platform}
+        onExit={exitSettings}
+      />
+    );
   } else {
-    main = <Today today={state.today} banners={state.banners} onChanged={() => void refresh()} />;
+    main = (
+      <Today
+        today={state.today}
+        banners={state.banners}
+        platform={state.platform}
+        permissionsMissing={android !== null && !android.permissionsOk}
+        onFixPermissions={() => setOnboarding(true)}
+        alarm={android?.alarm ?? null}
+        onStopAlarm={() => void api.androidStopAlarm().then(refresh, () => {})}
+        onChanged={() => void refresh()}
+      />
+    );
   }
 
   return (
@@ -91,12 +155,25 @@ export default function App() {
             {state?.environment === "dev" && <span className="env-badge">{t("app.devBadge")}</span>}
           </div>
           <div className="app__actions">
-            {paired && !inSettings && (
+            {paired && !inSettings && !showOnboarding && (
               <button type="button" className="round-button" aria-label={t("today.settings")} title={t("today.settings")} onClick={openSettings}>
                 <GearIcon />
               </button>
             )}
-            <QuickMenu theme={theme} onThemeChange={setTheme} debug={state?.debug ?? null} onDebugChange={() => void refresh()} />
+            <QuickMenu
+              theme={theme}
+              onThemeChange={setTheme}
+              platform={state?.platform ?? "windows"}
+              android={paired ? android : null}
+              onAndroidChange={() => void refresh()}
+              onOpenPermissions={() => {
+                setDiagnostics(false);
+                setOnboarding(true);
+              }}
+              onOpenDiagnostics={() => setDiagnostics(true)}
+              debug={state?.debug ?? null}
+              onDebugChange={() => void refresh()}
+            />
           </div>
         </header>
         <main className="app__main">{main}</main>

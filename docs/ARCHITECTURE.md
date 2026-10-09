@@ -63,12 +63,16 @@ C:\dev\clock-in\
   src/                         React + TS UI; Greek only, every string in src/i18n/el.json
   src-tauri/                   Tauri app (Rust): sync loop, secrets, admin session, commands; scheduler, audio, tray (Phase 4)
   plugins/clockin-alarm/       Tauri plugin: Rust side + android/ (Kotlin)
+  src-tauri/gen/android/       the generated Android Studio project (signing, minSdk, icons)
   supabase/migrations/         SQL migrations (schema, functions, grants, cron)
   assets/sounds/               generated check-in / check-out WAVs
   assets/icon/                 app icon sources (SVG): full design, hand-tuned 16/20/24/32/48 px, Android adaptive parts, icons.json
   assets/eff_large_wordlist.txt   (downloaded in Phase 0, SHA-256 recorded in DECISIONS)
   tools/gen-sounds/            small Rust bin that synthesises the sounds
   tools/generate-passphrase.ps1
+  tools/android-env.ps1        Android build environment on Windows (JDK, SDK, NDK, MSYS2 Perl/make for OpenSSL)
+  tools/build-apk.ps1          signed release APK, `-Env dev` (test phone) or `-Env prod` (employer)
+  tools/android-install-debug.ps1  development loop: arm64 debug build installed on the USB phone
   tools/build-icons.mjs        `pnpm icons`: every icon in src-tauri/icons from assets/icon (tauri icon + an .ico with the tuned layers)
   .env.example                 SUPABASE_URL=, SUPABASE_PUBLISHABLE_KEY=   (committed, empty values)
   .env.dev / .env.prod         real values (gitignored)
@@ -221,6 +225,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
   - closing the main window hides it;
   - **Quit** shows a 4-digit keypad and compares against the cached `quit_code`. It works offline.
   - autostart: the app writes `"<exe>" --autostart` to the current user's `Run` key (quoted path; `tauri-plugin-autostart` writes it unquoted) and starts hidden in the tray; single instance via `tauri-plugin-single-instance`.
+- **Sound and window together:** each scheduler decision sets both the sound and the alarm window (`alarms::Output`); the sound never plays without the window, and Stop or nobody left ends both.
 - **Dead-key guard:** every app window is subclassed to drop `WM_DEADCHAR` / `WM_SYSDEADCHAR` before tao, which panics on one it did not see the key-down for (DECISIONS 2026-10-07).
 - **Keep-awake:** `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)` while running.
 - **Mute detection:** Core Audio `IAudioEndpointVolume` (`GetMute`, master volume = 0), polled every 30 s, drives the banner.
@@ -230,16 +235,19 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 ## 10. Alarms — Android (Kotlin plugin `clockin-alarm`)
 
-**Commands exposed to Rust:**
+**Commands exposed to Rust** (Rust calls them off the main thread; see DECISIONS, Phase 5):
 
-- `setPlan(items, alertMode)`
+- `setPlan(items, alertMode, configVersion, horizonEnd, theme, darkWindows)`: Rust sends its own 14-day plan without the alarms that marks known on the phone suppress, plus the alarm screen's theme and the automatic theme's dark periods (`clockin-core::auto_dark_windows`)
 - `permissionStatus()`
-- `openPermissionSettings(kind)`
-- `requestBatteryExemption()`
-- `secretGet/Put(key, value)`
+- `alarmStatus()` (the cycle in progress, for the «Σταμάτημα» bar on Today) and `stopAlarm()`
+- `diagnostics()` (the «Διαγνωστικά» view: phone, background refresh, next and last alarm)
+- `openSettings(kind)` (notifications, exact alarms, full-screen, battery exemption, "pause if unused", the maker step, and Xiaomi's autostart, other-permissions and battery-saver screens)
+- `setOemDone(done)`
+- `secretGet/Set/Delete(name, value)`
 - `setServerConfig(url, publishableKey)`
+- `deviceName()`
 
-**Persisted** (app-private storage): the plan, the alert mode and the server config.
+**Persisted** (device-protected app storage, so alarms work after a reboot before the first unlock): the plan (times, kinds, staff names), the alert mode, the public server config, the handled alarms and the ring cycle in progress. The Keystore-encrypted secrets (device secret, local database key) stay in credential-encrypted storage, like the database itself: before the first unlock the pre-alarm check has no secret, so the alarm simply rings.
 
 **Scheduling**
 
@@ -258,16 +266,17 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 - Declare `USE_EXACT_ALARM`; the APK is sideloaded and alarm-centric.
 - Fall back to `SCHEDULE_EXACT_ALARM` plus `canScheduleExactAlarms()` checks.
-- Verify both against the current docs.
+- Verified (DECISIONS, Phase 5): `USE_EXACT_ALARM` is granted at install on Android 13+; `SCHEDULE_EXACT_ALARM` has `maxSdkVersion 32`.
 
 **On fire** (`BroadcastReceiver`)
 
-1. Start the ringing foreground service. Starting it from an exact alarm is an allowed background start. Verify the correct FGS type on Android 14–16 and record it in DECISIONS.
+1. Start the ringing foreground service. Starting it from an exact alarm is an allowed background start. Its type is `systemExempted` on Android 14+ (allowed with an exact-alarm permission) and `mediaPlayback` on 10–13 (DECISIONS, Phase 5).
 2. Call `check_alarm(item_ids)` with a 3 s timeout.
 3. If nothing is due, stop silently. If `config_version` is newer than the stored plan's, enqueue a one-time plan refresh first.
 4. **Ring mode:**
-   - a high-importance notification with a full-screen intent opens `AlarmActivity` (`showWhenLocked`, `turnScreenOn`), with names and a large **Stop**;
+   - a high-importance notification with a full-screen intent opens `AlarmActivity` (`showWhenLocked`, `turnScreenOn`), with names and a large **Stop**, in the app's theme. The notification must not be "silent" (`setSilent`): SystemUI refuses full-screen intents for silent notifications and for suppressed group alerts (DECISIONS 2026-10-07). If it is swiped away (Android 14+), its delete intent posts it again while the cycle lasts. If a cycle started before notifications were allowed, Android shows nothing, so the permission check and the 25 s re-check post it once they are allowed. Today also shows a **Σταμάτημα** bar;
    - `MediaPlayer` loops with `AudioAttributes.USAGE_ALARM`;
+   - while it rings, the server check repeats every 25 s: names marked, moved or removed elsewhere drop off the screen and notification, and the ring ends when none are left; a failed check keeps every name (fail loud);
    - after 5 minutes: stop the sound, remove the service, and schedule an exact re-ring 5 minutes later; the re-ring repeats the server check and drops marked names;
    - **Stop** ends the cycle for this event on this device;
    - if `canUseFullScreenIntent()` is false, still post the high-priority notification with the looping sound, and show the permission banner.
@@ -283,11 +292,15 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 **Onboarding checklist** (plain-language Greek, usable by a non-technical person on a phone call):
 
-- `POST_NOTIFICATIONS`;
-- exact alarms;
-- full-screen intent;
+- notifications: `POST_NOTIFICATIONS` on Android 13+; below that, the app's notifications and its alarm channel switched on (`areNotificationsEnabled`);
+- exact alarms (Android 12+);
+- full-screen intent (Android 14+);
 - battery-optimisation exemption (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`);
-- an OEM note with deep links for Xiaomi, Samsung, Huawei and Oppo autostart/background settings where they exist (see dontkillmyapp.com).
+- "Pause app activity if unused" off (Android 12+);
+- Kotlin reports the items that have no setting on the phone's Android version (`notApplicable`, always allowed there); the checklist leaves them out and «Διαγνωστικά» says they don't exist there. On Android 11 those are exact alarms, full screen and the unused-app switch;
+- an OEM note with deep links for Xiaomi, Samsung, Huawei and Oppo autostart/background settings where they exist (see dontkillmyapp.com); Xiaomi gets four steps (autostart, other permissions, battery saver, lock in Recents).
+- After an update (`MY_PACKAGE_REPLACED`), a notification if a required permission is off: Android 14+ installers may switch full-screen intents off on every update.
+- **WebView:** the web build targets Chrome 91 (`vite.config.ts`); below that Android System WebView version the plugin's `load` shows a native Greek dialog on every start with a Play Store button (the web screens may not run at all), and «Διαγνωστικά» shows the version.
 
 **HTTP client:** a minimal HTTPS POST to the RPC endpoint from Kotlin, using the stored publishable key and device secret.
 

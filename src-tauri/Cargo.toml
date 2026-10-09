@@ -56,6 +56,11 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[target.'cfg(target_os = "android")'.dependencies]
+# Start-up and alarm-feed messages in logcat (stderr goes nowhere on Android).
+log = "0.4"
+android_logger = "0.15"
+
 [target.'cfg(windows)'.dev-dependencies]
 # Tests only: reads the Greek keyboard layout (src/keyboard_guard.rs).
 windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse"] }

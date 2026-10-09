@@ -1,9 +1,10 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { setSystemPrefersDark } from "./test/setup";
 import { appState, callsTo, mockCommands } from "./test/tauri";
+import { FAILURES_BEFORE_MESSAGE, POLL_MS } from "./useAppState";
 
 describe("App", () => {
   it("shows the Greek first-run choices on an unpaired device, with the background", async () => {
@@ -32,6 +33,24 @@ describe("App", () => {
     mockCommands({ app_state: appState({ phase: "not_configured", today: null }) });
     render(<App />);
     expect(await screen.findByRole("heading", { name: "Λείπουν οι ρυθμίσεις διακομιστή" })).toBeInTheDocument();
+  });
+
+  it("on Android keeps clear of the system bars with Android's own sizes (old WebViews report none)", async () => {
+    window.localStorage.setItem("clockin.onboarding", "done");
+    const calls = mockCommands({
+      app_state: appState({
+        platform: "android",
+        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
+      }),
+      android_insets: { top: 24, right: 0, bottom: 48, left: 0 },
+    });
+    render(<App />);
+    const root = document.documentElement.style;
+    await waitFor(() => expect(root.getPropertyValue("--android-inset-top")).toBe("24px"));
+    expect(root.getPropertyValue("--android-inset-bottom")).toBe("48px");
+    expect(callsTo(calls, "android_insets")).toHaveLength(1);
+    for (const side of ["top", "right", "bottom", "left"]) root.removeProperty(`--android-inset-${side}`);
+    window.localStorage.removeItem("clockin.onboarding");
   });
 
   it("is Greek only: the menu has no language choice", async () => {
@@ -139,13 +158,22 @@ describe("App", () => {
     expect(callsTo(calls, "debug_set_clock")[1]).toEqual({ local: "2026-10-25T03:20", second: false });
   });
 
-  it("tells the user when the app core doesn't answer", async () => {
-    mockCommands({
-      app_state: () => {
-        throw new Error("no IPC");
-      },
-    });
-    render(<App />);
-    expect(await screen.findByText(/Η εφαρμογή δεν αποκρίνεται/)).toBeInTheDocument();
+  it("tells the user when the app core doesn't answer, after a short grace", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockCommands({
+        app_state: () => {
+          throw new Error("no IPC");
+        },
+      });
+      render(<App />);
+      // Android starts its core on a thread: the first answers may fail.
+      await vi.advanceTimersByTimeAsync(POLL_MS * 2);
+      expect(screen.getByText("Φόρτωση…")).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(POLL_MS * FAILURES_BEFORE_MESSAGE);
+      expect(screen.getByText(/Η εφαρμογή δεν αποκρίνεται/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

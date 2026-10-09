@@ -74,6 +74,89 @@ export interface AppStateView {
   autoDark: boolean;
   /** Whether Quit asks for the quit code (false before one is known). */
   quitCodeSet: boolean;
+  platform: Platform;
+  /** Android only. */
+  android: AndroidView | null;
+}
+
+export type AlertMode = "ring" | "notification";
+
+/** One Android checklist item (src-tauri: `android_open_settings`). */
+export type PermissionKind =
+  | "notifications"
+  | "exactAlarms"
+  | "fullScreen"
+  | "battery"
+  | "unusedApps"
+  | "oem"
+  | "xiaomiAutostart"
+  | "xiaomiPermissions"
+  | "xiaomiBattery";
+
+/** The Android onboarding checklist (SPEC §8.2). */
+export interface PermissionStatus {
+  notifications: boolean;
+  exactAlarms: boolean;
+  fullScreen: boolean;
+  battery: boolean;
+  /** "Pause app activity if unused" is off. */
+  unusedApps: boolean;
+  /** The phone maker if it needs an extra step ("samsung", "xiaomi", …), or "". */
+  oem: string;
+  /** The user said the maker step is done (it can't be checked). */
+  oemDone: boolean;
+  /** The phone's Android API level. */
+  sdk: number;
+  /** Items with no setting on this Android version (always allowed there), not shown. */
+  notApplicable: PermissionKind[];
+}
+
+export interface AndroidView {
+  alertMode: AlertMode;
+  /** Null until Android was first asked. */
+  permissions: PermissionStatus | null;
+  /** Everything the alarms need is granted (the maker step is advice). */
+  permissionsOk: boolean;
+  /** A ring-mode alarm in progress on this phone (Today shows «Σταμάτημα»). */
+  alarm: AlarmBanner | null;
+}
+
+export interface AlarmBanner {
+  /** False during the silent minutes between rings. */
+  ringing: boolean;
+  checkIn: string[];
+  checkOut: string[];
+}
+
+/** Android: the system bars around the app, in CSS pixels. */
+export interface Insets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** «Διαγνωστικά» (Android): read-only, no secrets. */
+export interface DiagnosticsView {
+  appVersion: string;
+  environment: "dev" | "prod";
+  phone: string;
+  androidVersion: string;
+  sdk: number;
+  /** MIUI, HyperOS or One UI version, or "". */
+  makerOs: string;
+  /** The Android System WebView's version, or "". */
+  webViewVersion: string;
+  /** False when it is older than the app's screens need. */
+  webViewOk: boolean;
+  alertMode: AlertMode;
+  permissions: PermissionStatus | null;
+  lastSync: LocalStamp | null;
+  lastRefresh: LocalStamp | null;
+  lastRefreshOk: boolean | null;
+  nextAlarm: LocalStamp | null;
+  lastAlarm: LocalStamp | null;
+  lastAlarmHow: "fullScreen" | "opened" | "notification" | "notificationMode" | null;
 }
 
 /** The alarm window's content (src-tauri/src/alarms.rs). Times are "HH:MM". */
@@ -277,4 +360,13 @@ export const api = {
   /** Exits the app if `code` is the quit code; otherwise rejects. */
   quit: (code: string) => call<void>("quit", { code }),
   debugSetClock: (local: string | null, second = false) => call<void>("debug_set_clock", { local, second }),
+  /** Android: ring or notification, per device. */
+  setAlertMode: (mode: AlertMode) => call<void>("set_alert_mode", { mode }),
+  /** Android: opens the phone's screen that fixes one checklist item. */
+  androidOpenSettings: (kind: PermissionKind) => call<void>("android_open_settings", { kind }),
+  androidSetOemDone: (done: boolean) => call<void>("android_set_oem_done", { done }),
+  androidStopAlarm: () => call<void>("android_stop_alarm"),
+  androidDiagnostics: () => call<DiagnosticsView | null>("android_diagnostics"),
+  androidInsets: () => call<Insets | null>("android_insets"),
+  setTheme: (theme: "auto" | "system" | "light" | "dark") => call<void>("set_theme", { theme }),
 };

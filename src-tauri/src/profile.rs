@@ -4,6 +4,9 @@
 //! webview data and credentials, so two instances can pair as two devices
 //! on one PC for sync testing. Release builds ignore the flag.
 
+// Debug profiles are a desktop feature; Android uses only the default one.
+#![cfg_attr(mobile, allow(dead_code))]
+
 use std::path::{Path, PathBuf};
 
 /// The credential namespace of the default profile: the app identifier.

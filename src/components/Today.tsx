@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   api,
+  type AlarmBanner,
   type Banners as BannerState,
   type MarkKind,
+  type Platform,
   type RefusedMark,
   type Row,
   type RowStatus,
@@ -35,12 +37,28 @@ const STATUS_LABEL = {
 interface TodayProps {
   today: TodayView | null;
   banners: BannerState;
+  platform: Platform;
+  /** Android: a permission the alarms need is missing (SPEC §6 banner). */
+  permissionsMissing: boolean;
+  onFixPermissions: () => void;
+  /** Android: a ring-mode alarm in progress on this phone. */
+  alarm?: AlarmBanner | null;
+  onStopAlarm?: () => void;
   /** Called after a mark so the screen updates at once. */
   onChanged: () => void;
 }
 
 /** The main screen (SPEC §6). */
-export function Today({ today, banners, onChanged }: TodayProps) {
+export function Today({
+  today,
+  banners,
+  platform,
+  permissionsMissing,
+  onFixPermissions,
+  alarm = null,
+  onStopAlarm,
+  onChanged,
+}: TodayProps) {
   const { t } = useTranslation();
   const [confirm, setConfirm] = useState<{ row: Row; kind: MarkKind } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +83,7 @@ export function Today({ today, banners, onChanged }: TodayProps) {
 
   return (
     <section className="today" aria-labelledby="today-heading">
+      {alarm && <AlarmBar alarm={alarm} onStop={() => onStopAlarm?.()} />}
       <div className="today__head">
         <h1 id="today-heading" className="today__date">
           {heading && (
@@ -81,7 +100,14 @@ export function Today({ today, banners, onChanged }: TodayProps) {
         )}
       </div>
 
-      <Banners banners={banners} today={today?.businessDate ?? null} onChanged={onChanged} />
+      <Banners
+        banners={banners}
+        today={today?.businessDate ?? null}
+        phone={platform === "android"}
+        permissionsMissing={permissionsMissing}
+        onFixPermissions={onFixPermissions}
+        onChanged={onChanged}
+      />
 
       {today === null ? (
         <p className="today__empty">{banners.offline ? t("today.noData") : t("today.syncing")}</p>
@@ -160,6 +186,34 @@ function RowItem({ row, onTap }: { row: Row; onTap: (kind: MarkKind) => void }) 
   );
 }
 
+/**
+ * Android: the alarm ringing on this phone (or silent between rings), with
+ * a large «Σταμάτημα», so it can be stopped even if its notification was
+ * swiped away. Like the alarm screen's button, it marks nobody.
+ */
+function AlarmBar({ alarm, onStop }: { alarm: AlarmBanner; onStop: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="alarm-bar" role="alert">
+      <p className="alarm-bar__title">{alarm.ringing ? t("today.alarmRinging") : t("today.alarmSilent")}</p>
+      {alarm.checkIn.length > 0 && (
+        <p className="alarm-bar__names">
+          {t("alarm.checkIn")}: {alarm.checkIn.join(", ")}
+        </p>
+      )}
+      {alarm.checkOut.length > 0 && (
+        <p className="alarm-bar__names">
+          {t("alarm.checkOut")}: {alarm.checkOut.join(", ")}
+        </p>
+      )}
+      <button type="button" className="button button--primary button--large alarm-bar__stop" onClick={onStop}>
+        {t("alarm.stop")}
+      </button>
+      <p className="alarm-bar__note">{t("alarm.note")}</p>
+    </div>
+  );
+}
+
 /** A mark the server refused: says so, by name, until «Εντάξει». */
 function RefusedNotice({ mark, onChanged }: { mark: RefusedMark; onChanged: () => void }) {
   const { t } = useTranslation();
@@ -191,10 +245,17 @@ function RefusedNotice({ mark, onChanged }: { mark: RefusedMark; onChanged: () =
 function Banners({
   banners,
   today,
+  phone,
+  permissionsMissing,
+  onFixPermissions,
   onChanged,
 }: {
   banners: BannerState;
   today: string | null;
+  /** Android wording ("this phone") instead of Windows. */
+  phone: boolean;
+  permissionsMissing: boolean;
+  onFixPermissions: () => void;
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
@@ -208,11 +269,19 @@ function Banners({
     });
   }
   if (banners.soundOff) items.push({ key: "sound", text: t("banner.soundOff") });
-  if (banners.clockSkew) items.push({ key: "skew", text: t("banner.clockSkew") });
-  if (banners.horizonShort) items.push({ key: "horizon", text: t("banner.horizonShort") });
-  if (items.length === 0 && banners.refusedMarks.length === 0) return null;
+  if (banners.clockSkew) items.push({ key: "skew", text: t(phone ? "banner.clockSkewPhone" : "banner.clockSkew") });
+  if (banners.horizonShort) items.push({ key: "horizon", text: t(phone ? "banner.horizonShortPhone" : "banner.horizonShort") });
+  if (items.length === 0 && banners.refusedMarks.length === 0 && !permissionsMissing) return null;
   return (
     <div className="banners">
+      {permissionsMissing && (
+        <div className="banner banner--permissions" role="alert">
+          <p className="banner__text">{t("banner.permissions")}</p>
+          <button type="button" className="button button--primary" onClick={onFixPermissions}>
+            {t("banner.fix")}
+          </button>
+        </div>
+      )}
       {banners.refusedMarks.map((mark) => (
         <RefusedNotice key={mark.id} mark={mark} onChanged={onChanged} />
       ))}

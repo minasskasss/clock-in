@@ -1,6 +1,6 @@
 [package]
 name = "tauri-plugin-clockin-alarm"
-description = "Clock In alarm plugin (Android AlarmManager bridge). Stub until Phase 5."
+description = "Clock In alarm plugin: the bridge to the Kotlin alarm code on Android"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,13 @@ links = "tauri-plugin-clockin-alarm"
 
 [dependencies]
 tauri.workspace = true
+serde.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+thiserror = "2.0.21"
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [build-dependencies]
 tauri-plugin = { workspace = true, features = ["build"] }
