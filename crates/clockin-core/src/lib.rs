@@ -14,6 +14,7 @@
 //! - [`AlarmScheduler`]: what the Windows alarm should do right now.
 //! - [`validate_week`] / [`validate_override`]: durations and overlaps.
 //! - [`auto_theme_is_dark`]: the automatic light/dark theme.
+//! - [`record_crash`]: when the Windows restart watcher gives up.
 
 mod admin;
 mod business_day;
@@ -29,6 +30,7 @@ mod sync;
 mod theme;
 mod today;
 mod validate;
+mod watchdog;
 
 #[cfg(test)]
 mod proptests;
@@ -72,3 +74,4 @@ pub use validate::{
     TimeRange, WeekError, is_valid_quit_code, normalize_name, validate_block, validate_override,
     validate_settings, validate_week,
 };
+pub use watchdog::{CRASH_WINDOW, MAX_CRASHES, RESTART_DELAY, record_crash};

@@ -273,6 +273,18 @@ pub struct DiagnosticsView {
     last_alarm: Option<crate::views::LocalStamp>,
     /// `fullScreen`, `opened`, `notification` or `notificationMode`.
     last_alarm_how: Option<String>,
+    /// The newer of the last Rust panic and the last Kotlin crash.
+    last_crash: Option<CrashView>,
+}
+
+/// A crash shown in «Διαγνωστικά»: when, in which app version, and what
+/// (one technical line, no data or codes).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrashView {
+    at: crate::views::LocalStamp,
+    version: String,
+    error: String,
 }
 
 /// # Errors
@@ -304,6 +316,27 @@ pub async fn android_diagnostics(
             .try_state::<Arc<crate::android::Android>>()
             .and_then(|a| a.status());
         let paired = state.phase() == Phase::Paired;
+        let kotlin_crash = d.last_crash_at.map(|at_ms| crate::crash::LastCrash {
+            at_ms,
+            version: d.last_crash_version.clone().unwrap_or_default(),
+            error: d.last_crash_error.clone().unwrap_or_default(),
+        });
+        let rust_crash = app
+            .path()
+            .app_local_data_dir()
+            .ok()
+            .and_then(|dir| crate::crash::load_last(&dir));
+        let last_crash = [kotlin_crash, rust_crash]
+            .into_iter()
+            .flatten()
+            .max_by_key(|c| c.at_ms)
+            .and_then(|c| {
+                Some(CrashView {
+                    at: LocalStamp::at(jiff::Timestamp::from_millisecond(c.at_ms).ok()?),
+                    version: c.version,
+                    error: c.error,
+                })
+            });
         Some(DiagnosticsView {
             app_version: env!("CARGO_PKG_VERSION"),
             environment: crate::config::ENVIRONMENT,
@@ -325,6 +358,7 @@ pub async fn android_diagnostics(
             next_alarm: stamp(d.next_alarm_at),
             last_alarm: stamp(d.last_alarm_at),
             last_alarm_how: d.last_alarm_how,
+            last_crash,
         })
     };
     #[cfg(not(target_os = "android"))]
@@ -734,6 +768,26 @@ pub fn debug_set_clock(
     } else {
         Err(CmdError::invalid("fake_clock", "unavailable"))
     }
+}
+
+/// Debug builds: crashes the app on purpose, as a release build would (a
+/// panic on a background thread, then the process ends), to test
+/// `crash.log` and the restart watcher. Refused in release builds.
+///
+/// # Errors
+///
+/// In release builds.
+#[tauri::command]
+pub fn debug_crash() -> Result<(), CmdError> {
+    if !cfg!(debug_assertions) {
+        return Err(CmdError::invalid("crash", "unavailable"));
+    }
+    let _ = std::thread::Builder::new()
+        .name("clock-in-test-crash".into())
+        .spawn(|| panic!("deliberate test crash from the debug menu"))
+        .map(std::thread::JoinHandle::join);
+    // Release builds abort on any panic; debug builds unwind, so end here.
+    std::process::abort();
 }
 
 #[cfg(test)]

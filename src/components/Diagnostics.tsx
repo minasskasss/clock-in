@@ -109,6 +109,18 @@ export function Diagnostics({ onClose }: { onClose: () => void }) {
             : t("diagnostics.none"),
         bad: view.lastAlarmHow === "notification",
       },
+      {
+        label: t("diagnostics.lastCrash"),
+        value: view.lastCrash
+          ? t("diagnostics.crashValue", {
+              time: stamp(view.lastCrash.at),
+              version: view.lastCrash.version,
+              error: view.lastCrash.error,
+            })
+          : t("diagnostics.noCrash"),
+        // Red only if it happened in the version now installed.
+        bad: view.lastCrash !== null && view.lastCrash.version === view.appVersion,
+      },
     );
   }
 

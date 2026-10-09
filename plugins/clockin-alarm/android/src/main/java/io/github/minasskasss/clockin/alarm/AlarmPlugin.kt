@@ -157,6 +157,11 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
             result.put("lastAlarmAt", at)
             result.put("lastAlarmHow", how)
         }
+        store.lastCrash()?.let { (at, version, error) ->
+            result.put("lastCrashAt", at)
+            result.put("lastCrashVersion", version)
+            result.put("lastCrashError", error)
+        }
         invoke.resolve(result)
     }
 

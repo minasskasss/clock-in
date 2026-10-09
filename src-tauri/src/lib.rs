@@ -18,6 +18,7 @@ mod autostart;
 mod clock;
 mod commands;
 pub mod config;
+mod crash;
 mod drafts;
 #[cfg(test)]
 mod e2e;
@@ -37,6 +38,8 @@ mod tray;
 mod views;
 #[cfg(windows)]
 mod volume;
+#[cfg(windows)]
+pub mod watcher;
 #[cfg(windows)]
 mod window_icon;
 
@@ -62,6 +65,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .with_max_level(log::LevelFilter::Info),
     );
     let data_dir = app.path().app_local_data_dir()?;
+    std::fs::create_dir_all(&data_dir)?;
+    crash::install(data_dir.clone());
     WebviewWindowBuilder::new(app, "main", WebviewUrl::default()).build()?;
     let handle = app.handle().clone();
     std::thread::Builder::new()
@@ -79,6 +84,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let profile = Profile::from_args();
     let data_dir = profile.data_dir(&app.path().app_local_data_dir()?);
     std::fs::create_dir_all(&data_dir)?;
+    // First, so a failed start below is in crash.log too.
+    crash::install(data_dir.clone());
     let secrets = PlatformSecrets::new(profile.credential_service(), &data_dir)?;
     let (state, secret) = AppState::open(
         profile.clone(),
@@ -236,6 +243,7 @@ pub fn run() {
             commands::android_diagnostics,
             commands::android_insets,
             commands::debug_set_clock,
+            commands::debug_crash,
         ])
         .run(tauri::generate_context!())
         .expect("error while running the Tauri application");

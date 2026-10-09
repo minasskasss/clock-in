@@ -31,6 +31,8 @@ const KEYS: &[&str] = &[
     "tray.quit",
     "tray.tooltip",
     "alarm.windowTitle",
+    "watcher.gaveUpTitle",
+    "watcher.gaveUp",
 ];
 
 #[cfg(test)]

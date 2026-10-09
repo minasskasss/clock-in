@@ -33,6 +33,7 @@ function diagnostics(overrides: Partial<DiagnosticsView> = {}): DiagnosticsView 
     nextAlarm: { date: "2026-10-07", time: "12:00" },
     lastAlarm: { date: "2026-10-06", time: "21:30" },
     lastAlarmHow: "notification",
+    lastCrash: null,
     ...overrides,
   };
 }
@@ -114,6 +115,30 @@ describe("Diagnostics", () => {
     const value = screen.getByText("Android System WebView").nextSibling as HTMLElement;
     expect(value).toHaveTextContent("90.0.4430.210: πολύ παλιά. Ενημερώστε το «Android System WebView» από το Play Store.");
     expect(value.parentElement).toHaveClass("diagnostics__row--bad");
+  });
+
+  it("says when the app never crashed", async () => {
+    await openDiagnostics(diagnostics());
+    expect(screen.getByText("Τελευταίο απρόσμενο κλείσιμο").nextSibling).toHaveTextContent("κανένα");
+  });
+
+  it("shows when and why the app last crashed", async () => {
+    const crash = {
+      at: { date: "2026-10-08", time: "19:42" },
+      version: "0.5.0",
+      error: "IllegalStateException: boom (RingService.kt:120)",
+    };
+    await openDiagnostics(diagnostics({ lastCrash: crash }));
+    const value = screen.getByText("Τελευταίο απρόσμενο κλείσιμο").nextSibling as HTMLElement;
+    expect(value).toHaveTextContent("08/10/2026 19:42, έκδοση 0.5.0: IllegalStateException: boom (RingService.kt:120)");
+    expect(value.parentElement).toHaveClass("diagnostics__row--bad");
+  });
+
+  it("does not show an older version's crash in red", async () => {
+    const crash = { at: { date: "2026-10-01", time: "10:00" }, version: "0.4.9", error: "panicked at a.rs:1:1: x" };
+    await openDiagnostics(diagnostics({ lastCrash: crash }));
+    const value = screen.getByText("Τελευταίο απρόσμενο κλείσιμο").nextSibling as HTMLElement;
+    expect(value.parentElement).not.toHaveClass("diagnostics__row--bad");
   });
 
   it("is not in the Windows menu", async () => {
