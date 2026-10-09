@@ -19,9 +19,11 @@ use std::panic::PanicHookInfo;
 use std::path::{Path, PathBuf};
 
 /// The desktop crash log, in the app's data folder.
+#[cfg_attr(target_os = "android", allow(dead_code))]
 pub const LOG_FILE: &str = "crash.log";
 
 /// `crash.log` is kept under this size.
+#[cfg_attr(target_os = "android", allow(dead_code))]
 pub const MAX_LOG_BYTES: usize = 100 * 1024;
 
 /// Android: the last panic.
@@ -85,6 +87,7 @@ fn one_line(text: &str) -> String {
 }
 
 /// One `crash.log` line: "09/10/2026 14:03:12 | Clock In 1.0.0 (prod) | who | what".
+#[cfg_attr(target_os = "android", allow(dead_code))]
 #[must_use]
 pub fn line(at: Timestamp, who: &str, what: &str) -> String {
     let local = clockin_core::shop_datetime(at);
@@ -103,6 +106,7 @@ pub fn line(at: Timestamp, who: &str, what: &str) -> String {
 /// # Errors
 ///
 /// If the file can't be read or written.
+#[cfg_attr(target_os = "android", allow(dead_code))]
 pub fn append_line(path: &Path, line: &str) -> io::Result<()> {
     let entry = format!("{line}\n");
     let size = fs::metadata(path).map_or(0, |m| usize::try_from(m.len()).unwrap_or(usize::MAX));
