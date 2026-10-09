@@ -108,14 +108,20 @@ The quit code only stops the shop PC app from being closed by accident.
 3. It syncs to every device within seconds, also the phone (it isn't used there).
 
 **Closing the app without the code** (for example if Settings can't open):
-Clock In now runs with a small helper that restarts it if it closes, so
-ending it in Task Manager alone brings it back after 2 seconds. To stop both:
+Clock In runs as two processes: the app and a small helper (the watcher) that
+restarts the app if it closes unexpectedly.
 
-1. Press **Ctrl+Shift+Esc** (Task Manager) → **More details** if needed →
-   tab **Details**.
-2. There are two `clock-in.exe` lines. Right-click either → **End process tree**.
-   Do the same for the other if it is still there.
-3. To start it again: Start menu → **Clock In**.
+1. Press **Ctrl+Shift+Esc** (Task Manager) → **More details** if needed.
+2. Under **Apps**, find **Clock In** (click the arrow: it holds two processes).
+   Right-click the **Clock In** group line itself → **End task**.
+3. Both processes end, and **Clock In stays stopped: no alarms on this PC**
+   until someone starts it from the Start menu → **Clock In**, or Windows
+   restarts (it starts with Windows). This is a deliberate stop, so nothing is
+   written to `crash.log`.
+
+Ending **only one** of the two processes inside the group ends just the app:
+the watcher starts it again within a few seconds and writes one «watcher» line
+to `crash.log` (§7). That is the same path as a real crash.
 
 ## 5. Install a new version on the shop PC (AnyDesk)
 
@@ -216,9 +222,13 @@ One screen with everything about the phone. No passwords on it.
      «επιτυχής». Hours old means MIUI is stopping the app (section 9).
    - **Επόμενη ειδοποίηση:** the next shift time.
    - **Τελευταία ειδοποίηση:** «άνοιξε σε πλήρη οθόνη» is perfect; «μόνο ως
-     ειδοποίηση» means a MIUI pop-up setting is missing (section 9, step 2).
+     ειδοποίηση» means a MIUI pop-up setting is missing (section 9, step 2),
+     unless the phone was unlocked and in use at that minute: then Android
+     shows a banner at the top instead of the full screen, which is normal.
    - **Τελευταίο απρόσμενο κλείσιμο:** «κανένα» is normal. Red text means the
-     app crashed in this version: send the screenshot to Claude Code.
+     app crashed in this version: send the screenshot to Claude Code. «Native
+     crash» or «ANR» (the app froze) usually comes from Android System WebView:
+     update it (section 10).
 
 ## 9. The phone's alarms stopped: the MIUI settings
 

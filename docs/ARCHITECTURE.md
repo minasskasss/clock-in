@@ -310,7 +310,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 - After an update (`MY_PACKAGE_REPLACED`), a notification if a required permission is off: Android 14+ installers may switch full-screen intents off on every update.
 - **WebView:** the web build targets Chrome 91 (`vite.config.ts`); below that Android System WebView version the plugin's `load` shows a native Greek dialog on every start with a Play Store button (the web screens may not run at all), and «Διαγνωστικά» shows the version.
 
-**Crash record:** a `ContentProvider` (`CrashRecorder`, created at process start, before any activity, receiver or service) installs an uncaught-exception handler that keeps the last crash (time, version, exception class, message cut to 160 characters, first app stack frame) in device-protected storage; Rust's panic hook keeps its last panic in `last-crash.json`. «Διαγνωστικά» shows the newer one.
+**Crash record:** a `ContentProvider` (`CrashRecorder`, created at process start, before any activity, receiver or service) installs an uncaught-exception handler that keeps the last crash (time, version, exception class, message cut to 160 characters, first app stack frame) in device-protected storage; Rust's panic hook keeps its last panic in `last-crash.json`. On Android 11+ the app also reads Android's own exit history (`ActivityManager.getHistoricalProcessExitReasons`) for native crashes and ANRs since the installed version was installed, which neither handler sees (a crashed WebView renderer ends the app with a native signal). «Διαγνωστικά» shows the newest of the three.
 
 **HTTP client:** a minimal HTTPS POST to the RPC endpoint from Kotlin, using the stored publishable key and device secret.
 

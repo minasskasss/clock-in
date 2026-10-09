@@ -1,15 +1,18 @@
 package io.github.minasskasss.clockin.alarm
 
+import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 
 /**
  * Keeps the last uncaught Kotlin/Java exception (time, app version, error)
- * for «Διαγνωστικά» (PLAN Phase 6). Rust keeps its own last panic; the
- * newer of the two is shown.
+ * for «Διαγνωστικά» (PLAN Phase 6). Rust keeps its own last panic and
+ * Android its own record of native crashes and ANRs; the newest is shown.
  *
  * Android creates content providers when the process starts, before any
  * activity, receiver or service, so this one installs the handler for the
@@ -30,12 +33,38 @@ class CrashRecorder : ContentProvider() {
         fun describe(e: Throwable): String {
             val frame = e.stackTrace.firstOrNull { it.className.startsWith("io.github.minasskasss.") }
                 ?: e.stackTrace.firstOrNull()
-            val message = (e.message ?: "")
-                .map { if (it.isISOControl()) ' ' else it }
-                .joinToString("")
-                .let { if (it.length > MAX_MESSAGE) it.take(MAX_MESSAGE) + "…" else it }
             val where = frame?.let { " (${it.fileName}:${it.lineNumber})" } ?: ""
-            return "${e.javaClass.simpleName}: $message$where"
+            return "${e.javaClass.simpleName}: ${oneLine(e.message)}$where"
+        }
+
+        private fun oneLine(text: String?): String = (text ?: "")
+            .map { if (it.isISOControl()) ' ' else it }
+            .joinToString("")
+            .let { if (it.length > MAX_MESSAGE) it.take(MAX_MESSAGE) + "…" else it }
+
+        /**
+         * The last native crash or ANR of this installed version, from
+         * Android's own record of how the app's processes ended (Android 11+).
+         * The handler above never sees these: for example, a crashed WebView
+         * renderer takes the app down with a native signal.
+         */
+        fun lastFromSystem(context: Context): Triple<Long, String, String>? {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+            return try {
+                val info = context.packageManager.getPackageInfo(context.packageName, 0)
+                val am = context.getSystemService(ActivityManager::class.java) ?: return null
+                val exit = am.getHistoricalProcessExitReasons(context.packageName, 0, 0)
+                    .filter { it.timestamp >= info.lastUpdateTime }
+                    .filter { it.reason == ApplicationExitInfo.REASON_CRASH_NATIVE || it.reason == ApplicationExitInfo.REASON_ANR }
+                    .maxByOrNull { it.timestamp } ?: return null
+                val error = when (exit.reason) {
+                    ApplicationExitInfo.REASON_ANR -> "ANR: ${oneLine(exit.description)}"
+                    else -> "Native crash, signal ${exit.status}"
+                }
+                Triple(exit.timestamp, info.versionName ?: "", error)
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
