@@ -265,9 +265,10 @@
 }
 
 /*
- * Android phones held upright: smaller clock and names, and the status pill
- * on the name's line when both fit (otherwise on its own line under it).
- * Sizes are in rem, so Android's font-size setting still scales them.
+ * Android phones held upright: smaller clock and names; the name has the
+ * whole first line, and the status pill sits on the hours' line, so every
+ * row has the same shape however long the name. Sizes are in rem, so
+ * Android's font-size setting still scales them.
  */
 @media (orientation: portrait) {
   :root[data-platform="android"] .today {
@@ -299,31 +300,31 @@
   }
 
   :root[data-platform="android"] .row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name name"
+      "hours status";
     gap: var(--space-1) var(--space-2);
     padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
     border-left-width: 8px;
   }
 
   :root[data-platform="android"] .row__name {
-    flex: 1 1 auto;
     min-width: 0;
     font-size: 1.3125rem;
     overflow-wrap: anywhere;
   }
 
   :root[data-platform="android"] .row__status {
-    margin-left: auto;
+    justify-self: end;
+    text-align: center;
     padding: var(--space-1) var(--space-3);
     font-size: 0.875rem;
   }
 
   :root[data-platform="android"] .row__hours {
-    order: 1;
-    flex-basis: 100%;
     font-size: 1rem;
+    white-space: nowrap;
   }
 
   :root[data-platform="android"] .row--left .row__name,

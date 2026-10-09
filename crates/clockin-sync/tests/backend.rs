@@ -1,6 +1,8 @@
 //! Backend integration tests against the **dev** Supabase project
-//! (ARCHITECTURE §12). They wipe dev's data, so they are `#[ignore]`d and run
-//! only on request, one at a time:
+//! (ARCHITECTURE §12). Most wipe dev's data (devices paired to dev included),
+//! so they are `#[ignore]`d and run only on request, one at a time. The ones
+//! whose ignore reason says "keeps dev's data" (most in `backend/keep.rs`)
+//! only read, or add and remove their own throwaway rows:
 //!
 //! ```text
 //! cargo test -p clockin-sync --test backend -- --ignored --test-threads=1
@@ -26,6 +28,10 @@ use jiff::{SignedDuration, Timestamp};
 use std::sync::Arc;
 use tokio::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
+
+/// Phase 6 checks that keep dev's data.
+#[path = "backend/keep.rs"]
+mod keep;
 
 /// Dev state is shared, so tests take turns even without `--test-threads=1`.
 static LOCK: Mutex<()> = Mutex::const_new(());
@@ -166,6 +172,20 @@ async fn dev() -> Dev {
     }
 }
 
+/// Dev as it is, without wiping anything (read-only checks, and checks that
+/// remove only their own throwaway rows).
+async fn dev_as_is() -> Dev {
+    let guard = LOCK.lock().await;
+    let config = read_env_dev();
+    let db = connect_db(&config).await;
+    Dev {
+        api: Api::new(&config).unwrap(),
+        config,
+        db,
+        _guard: guard,
+    }
+}
+
 /// A throwaway 5-word EFF passphrase.
 fn throwaway_passphrase() -> String {
     let bytes = Uuid::new_v4().into_bytes();
@@ -285,9 +305,9 @@ async fn reset_dev() {
 }
 
 #[tokio::test]
-#[ignore = "uses the dev Supabase project"]
+#[ignore = "uses the dev Supabase project; keeps dev's data"]
 async fn app_schema_is_unreachable_and_locked_down() {
-    let dev = dev().await;
+    let dev = dev_as_is().await;
     let _ = rustls::crypto::ring::default_provider().install_default();
     let http = reqwest::Client::builder()
         .tls_backend_preconfigured(tls())

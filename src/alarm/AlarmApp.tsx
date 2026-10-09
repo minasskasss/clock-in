@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../App.css";
-import { api, type AlarmStateView } from "../api";
+import { api, type AlarmName, type AlarmStateView } from "../api";
 import { Background } from "../components/Background";
 import { useTheme } from "../theme/useTheme";
 import "./AlarmApp.css";
@@ -53,11 +53,11 @@ export function AlarmApp() {
           <>
             <header className="alarm__head">
               <p className="alarm__title">{t("alarm.title")}</p>
-              <p className="alarm__time">{alarm.at}</p>
+              {alarm.at && <p className="alarm__time">{alarm.at}</p>}
             </header>
             <div className="alarm__lists">
-              <NameList title={t("alarm.checkIn")} names={alarm.checkIn} kind="in" />
-              <NameList title={t("alarm.checkOut")} names={alarm.checkOut} kind="out" />
+              <NameList title={t("alarm.checkIn")} names={alarm.checkIn} kind="in" withTimes={!alarm.at} />
+              <NameList title={t("alarm.checkOut")} names={alarm.checkOut} kind="out" withTimes={!alarm.at} />
             </div>
             {!alarm.ringing && alarm.reringAt && (
               <p className="alarm__silent" role="status">
@@ -75,14 +75,31 @@ export function AlarmApp() {
   );
 }
 
-function NameList({ title, names, kind }: { title: string; names: string[]; kind: "in" | "out" }) {
+/**
+ * One section of names. `withTimes`: the names joined from different
+ * minutes, so each shows its own alarm time (the header then shows none).
+ */
+function NameList({
+  title,
+  names,
+  kind,
+  withTimes,
+}: {
+  title: string;
+  names: AlarmName[];
+  kind: "in" | "out";
+  withTimes: boolean;
+}) {
   if (names.length === 0) return null;
   return (
     <section className={`alarm__list alarm__list--${kind}`} aria-label={title}>
       <h2 className="alarm__list-title">{title}</h2>
       <ul className="alarm__names">
-        {names.map((name, index) => (
-          <li key={`${index}-${name}`}>{name}</li>
+        {names.map(({ name, at }, index) => (
+          <li key={`${index}-${name}`} className="alarm__name">
+            {withTimes && <span className="alarm__name-time">{at}</span>}
+            <span>{name}</span>
+          </li>
         ))}
       </ul>
     </section>

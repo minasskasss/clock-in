@@ -25,6 +25,14 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application>
+        <!-- Records the last crash for «Διαγνωστικά»; created at process start. Serves no data. -->
+        <provider
+            android:name=".CrashRecorder"
+            android:authorities="${applicationId}.clockin-crash"
+            android:directBootAware="true"
+            android:exported="false"
+            android:initOrder="1000" />
+
         <!-- Rings an alarm event: started from the exact alarm. -->
         <service
             android:name=".RingService"

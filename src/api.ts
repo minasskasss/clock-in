@@ -157,17 +157,33 @@ export interface DiagnosticsView {
   nextAlarm: LocalStamp | null;
   lastAlarm: LocalStamp | null;
   lastAlarmHow: "fullScreen" | "opened" | "notification" | "notificationMode" | null;
+  /** The last time the app crashed (Rust or Kotlin), if ever. */
+  lastCrash: CrashView | null;
+}
+
+export interface CrashView {
+  at: LocalStamp;
+  version: string;
+  /** One technical line, e.g. "panicked at src\state.rs:12:5: …". */
+  error: string;
 }
 
 /** The alarm window's content (src-tauri/src/alarms.rs). Times are "HH:MM". */
 export interface AlarmView {
   id: number;
-  at: string;
-  checkIn: string[];
-  checkOut: string[];
+  /** The alarm's minute when every name shares it; null when names joined from different minutes. */
+  at: string | null;
+  checkIn: AlarmName[];
+  checkOut: AlarmName[];
   /** False during the silent part of the cycle. */
   ringing: boolean;
   reringAt: string | null;
+}
+
+/** One name on the alarm window, with its own alarm time. */
+export interface AlarmName {
+  name: string;
+  at: string;
 }
 
 export interface AlarmStateView {
@@ -360,6 +376,8 @@ export const api = {
   /** Exits the app if `code` is the quit code; otherwise rejects. */
   quit: (code: string) => call<void>("quit", { code }),
   debugSetClock: (local: string | null, second = false) => call<void>("debug_set_clock", { local, second }),
+  /** Debug builds: ends the app as a crash would (crash.log, restart watcher). */
+  debugCrash: () => call<void>("debug_crash"),
   /** Android: ring or notification, per device. */
   setAlertMode: (mode: AlertMode) => call<void>("set_alert_mode", { mode }),
   /** Android: opens the phone's screen that fixes one checklist item. */

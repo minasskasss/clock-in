@@ -33,30 +33,50 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 pub struct AlarmView {
     /// Pass back to `alarm_stop`.
     pub id: u64,
-    /// The alarm's minute (the earliest, if several joined).
-    pub at: String,
-    pub check_in: Vec<String>,
-    pub check_out: Vec<String>,
+    /// The alarm's minute when every name shares it. `None` when names
+    /// joined from different minutes: each name then shows its own time.
+    pub at: Option<String>,
+    pub check_in: Vec<AlarmName>,
+    pub check_out: Vec<AlarmName>,
     /// False during the silent part of the cycle.
     pub ringing: bool,
     /// When a silent alarm rings again.
     pub rering_at: Option<String>,
 }
 
+/// One name on the alarm window, with its own alarm time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AlarmName {
+    pub name: String,
+    pub at: String,
+}
+
 impl AlarmView {
     fn new(alarm: &RingingAlarm) -> Self {
-        let names = |items: &[clockin_core::PlanItem]| -> Vec<String> {
-            items.iter().map(|i| i.display_name.clone()).collect()
+        let names = |items: &[clockin_core::PlanItem]| -> Vec<AlarmName> {
+            items
+                .iter()
+                .map(|i| AlarmName {
+                    name: i.display_name.clone(),
+                    at: LocalStamp::at(i.fires_at).time,
+                })
+                .collect()
         };
+        let event = &alarm.event;
+        let one_minute = event
+            .check_in
+            .iter()
+            .chain(&event.check_out)
+            .all(|i| i.fires_at == event.at);
         let (ringing, rering_at) = match alarm.phase {
             RingPhase::Ringing { .. } => (true, None),
             RingPhase::Silent { rering_at, .. } => (false, Some(LocalStamp::at(rering_at).time)),
         };
         Self {
             id: alarm.id,
-            at: LocalStamp::at(alarm.event.at).time,
-            check_in: names(&alarm.event.check_in),
-            check_out: names(&alarm.event.check_out),
+            at: one_minute.then(|| LocalStamp::at(event.at).time),
+            check_in: names(&event.check_in),
+            check_out: names(&event.check_out),
             ringing,
             rering_at,
         }
@@ -294,9 +314,13 @@ mod tests {
         };
         let view = AlarmView::new(&silent);
         assert_eq!(view.id, 7);
-        assert_eq!(view.at, "09:00");
-        assert_eq!(view.check_in, ["Anna Alpha"]);
-        assert_eq!(view.check_out, ["Babis Beta"]);
+        assert_eq!(view.at.as_deref(), Some("09:00"));
+        let name = |name: &str, at: &str| AlarmName {
+            name: name.into(),
+            at: at.into(),
+        };
+        assert_eq!(view.check_in, [name("Anna Alpha", "09:00")]);
+        assert_eq!(view.check_out, [name("Babis Beta", "09:00")]);
         assert!(!view.ringing);
         assert_eq!(view.rering_at.as_deref(), Some("09:10"));
     }
@@ -381,6 +405,26 @@ mod tests {
         for hm in ["06:03", "06:12", "06:17"] {
             assert_eq!(output(&mut s, hm, &snap).1, off, "{hm}");
         }
+    }
+
+    #[test]
+    fn names_that_joined_later_show_their_own_time() {
+        let snap = overlapping();
+        let mut s = AlarmScheduler::default();
+        // 09:00: Anna alone, the time in the header.
+        let (alarm, _) = output(&mut s, "06:00", &snap);
+        let view = AlarmView::new(&alarm.unwrap());
+        assert_eq!(view.at.as_deref(), Some("09:00"));
+        // 09:02: Babis joins; each name keeps its own time, none in the header.
+        let (alarm, _) = output(&mut s, "06:02", &snap);
+        let view = AlarmView::new(&alarm.unwrap());
+        assert_eq!(view.at, None);
+        let shown: Vec<(&str, &str)> = view
+            .check_in
+            .iter()
+            .map(|n| (n.name.as_str(), n.at.as_str()))
+            .collect();
+        assert_eq!(shown, [("Anna Test", "09:00"), ("Babis Test", "09:02")]);
     }
 
     #[test]

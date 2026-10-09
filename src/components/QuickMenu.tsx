@@ -202,6 +202,9 @@ function DebugSection({ debug, onChange }: { debug: NonNullable<AppStateView["de
           })}
         </p>
       )}
+      <button type="button" className="button quick-menu__crash" onClick={() => void api.debugCrash()}>
+        {t("menu.crash")}
+      </button>
     </fieldset>
   );
 }

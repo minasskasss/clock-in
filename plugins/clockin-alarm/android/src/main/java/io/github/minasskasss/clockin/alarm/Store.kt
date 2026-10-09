@@ -210,6 +210,21 @@ internal class Store private constructor(private val prefs: SharedPreferences) {
         return prefs.getLong("last_alarm_at", 0) to how
     }
 
+    /** The app crashed (written synchronously: the process is ending). */
+    fun recordCrash(atMs: Long, version: String, error: String) {
+        prefs.edit()
+            .putLong("last_crash_at", atMs)
+            .putString("last_crash_version", version)
+            .putString("last_crash_error", error)
+            .commit()
+    }
+
+    /** The last crash: time, app version and error. */
+    fun lastCrash(): Triple<Long, String, String>? {
+        val error = prefs.getString("last_crash_error", null) ?: return null
+        return Triple(prefs.getLong("last_crash_at", 0), prefs.getString("last_crash_version", "") ?: "", error)
+    }
+
     // --- Handled alarms -----------------------------------------------------
 
     fun handledKeys(): Set<String> = handled().keys

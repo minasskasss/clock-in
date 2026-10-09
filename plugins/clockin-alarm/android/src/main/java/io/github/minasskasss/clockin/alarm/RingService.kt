@@ -31,6 +31,19 @@ internal object Ring {
     /** "HH:MM", Greek time whatever the phone's timezone (SPEC §4.2). */
     fun hhmm(ms: Long): String = greekTime.format(Instant.ofEpochMilli(ms))
 
+    /** Whether every alarm in `items` is due at the same minute. */
+    fun oneMinute(items: List<PlanItem>): Boolean = items.map { it.firesAtMs }.distinct().size <= 1
+
+    /**
+     * The names of one kind ("in" / "out"), earliest alarm first. With
+     * `withTimes`, each is "HH:MM  Name" with its own alarm time.
+     */
+    fun names(items: List<PlanItem>, kind: String, withTimes: Boolean): List<String> =
+        items.filter { it.kind == kind }
+            .sortedBy { it.firesAtMs }
+            .map { if (withTimes) "${hhmm(it.firesAtMs)}  ${it.name}" else it.name }
+            .distinct()
+
     fun addListener(listener: () -> Unit) = listeners.add(listener)
 
     fun removeListener(listener: () -> Unit) = listeners.remove(listener)

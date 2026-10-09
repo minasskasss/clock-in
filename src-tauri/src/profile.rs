@@ -9,8 +9,11 @@
 
 use std::path::{Path, PathBuf};
 
+/// The app identifier (`tauri.conf.json`), also the name of its data folder.
+pub const IDENTIFIER: &str = "io.github.minasskasss.clockin";
+
 /// The credential namespace of the default profile: the app identifier.
-const SERVICE: &str = "io.github.minasskasss.clockin";
+const SERVICE: &str = IDENTIFIER;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Profile {

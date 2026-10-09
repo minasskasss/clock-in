@@ -90,6 +90,10 @@ pub struct Diagnostics {
     pub last_alarm_at: Option<i64>,
     /// `fullScreen`, `opened` (from the notification), `notification` or `notificationMode`.
     pub last_alarm_how: Option<String>,
+    /// The last uncaught Kotlin/Java exception: when, in which app version, and what.
+    pub last_crash_at: Option<i64>,
+    pub last_crash_version: Option<String>,
+    pub last_crash_error: Option<String>,
 }
 
 /// The status and navigation bars (and any camera cutout) around the app,

@@ -57,11 +57,13 @@
 ```
 C:\dev\clock-in\
   CLAUDE.md
+  README.md
   docs/                        SPEC, ARCHITECTURE, PLAN, DECISIONS, SETUP, IDEAS, RECOVERY
   crates/clockin-core/         pure logic: schedules, business day, plan, validation, automatic theme
   crates/clockin-sync/         RPC client, SQLCipher store, sync-loop logic (no Tauri)
   src/                         React + TS UI; Greek only, every string in src/i18n/el.json
-  src-tauri/                   Tauri app (Rust): sync loop, secrets, admin session, commands; scheduler, audio, tray (Phase 4)
+  src-tauri/                   Tauri app (Rust): sync loop, secrets, admin session, commands; scheduler, audio, tray (Phase 4);
+                               crash log (crash.rs) and the Windows restart watcher (watcher.rs) (Phase 6)
   plugins/clockin-alarm/       Tauri plugin: Rust side + android/ (Kotlin)
   src-tauri/gen/android/       the generated Android Studio project (signing, minSdk, icons)
   supabase/migrations/         SQL migrations (schema, functions, grants, cron)
@@ -141,6 +143,7 @@ C:\dev\clock-in\
 9. **The publishable key is public by design.** All it allows is calling the RPCs, and every RPC needs a device secret except `admin_initialize` (works only once) and `pair_device` (lockout-protected).
 10. **The quit code is not a security control.** It is delivered to every paired device in the snapshot and compared locally.
 11. **Accepted risk:** someone who extracts the publishable key from the app could deliberately trigger the lockout (a nuisance-level denial of service). A 64-bit passphrase cannot realistically be brute-forced through a 60-minute-capped lockout.
+12. **Supabase Auth is unused.** E-mail sign-ups are switched off in both projects (Authentication → Sign In / Providers → "Allow new users to sign up" off), and `authenticated` has no privileges on any RPC or on schema `app` anyway (Phase 6 review).
 
 ## 6. RPC contract (PostgREST `POST /rest/v1/rpc/<name>`)
 
@@ -227,6 +230,11 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
   - autostart: the app writes `"<exe>" --autostart` to the current user's `Run` key (quoted path; `tauri-plugin-autostart` writes it unquoted) and starts hidden in the tray; single instance via `tauri-plugin-single-instance`.
 - **Sound and window together:** each scheduler decision sets both the sound and the alarm window (`alarms::Output`); the sound never plays without the window, and Stop or nobody left ends both.
 - **Dead-key guard:** every app window is subclassed to drop `WM_DEADCHAR` / `WM_SYSDEADCHAR` before tao, which panics on one it did not see the key-down for (DECISIONS 2026-10-07).
+- **Crash log and restart watcher** (Phase 6, DECISIONS 2026-10-09):
+  - a panic hook appends one line per panic to `crash.log` in the data folder (Greek time, version, dev/prod, thread, message, file:line; no backtrace, data or codes), capped at about 100 KB (the older half is dropped);
+  - the installed app runs as two processes of the same `clock-in.exe`: a watcher without a visible window, and the app it starts with `--watched`. Exit code 0 (Tray → Quit with the code, or a second copy handing over) ends both; any other end is logged and restarted after 2 s with the window showing; after 5 crashes in 10 minutes (`clockin-core::record_crash`) the watcher logs it, shows a Greek message box and stops;
+  - a hidden top-level window in the watcher receives `WM_QUERYENDSESSION` / `WM_ENDSESSION` (sign-out, shutdown, and the installer's Restart Manager), and `SM_SHUTTINGDOWN` is checked before each restart, so updates and shutdowns never fight a restart;
+  - debug builds run under the watcher only with `--watch`; the debug menu has a deliberate crash.
 - **Keep-awake:** `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)` while running.
 - **Mute detection:** Core Audio `IAudioEndpointVolume` (`GetMute`, master volume = 0), polled every 30 s, drives the banner.
 - **Debug builds only:**
@@ -240,7 +248,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 - `setPlan(items, alertMode, configVersion, horizonEnd, theme, darkWindows)`: Rust sends its own 14-day plan without the alarms that marks known on the phone suppress, plus the alarm screen's theme and the automatic theme's dark periods (`clockin-core::auto_dark_windows`)
 - `permissionStatus()`
 - `alarmStatus()` (the cycle in progress, for the «Σταμάτημα» bar on Today) and `stopAlarm()`
-- `diagnostics()` (the «Διαγνωστικά» view: phone, background refresh, next and last alarm)
+- `diagnostics()` (the «Διαγνωστικά» view: phone, background refresh, next and last alarm, last Kotlin crash)
 - `openSettings(kind)` (notifications, exact alarms, full-screen, battery exemption, "pause if unused", the maker step, and Xiaomi's autostart, other-permissions and battery-saver screens)
 - `setOemDone(done)`
 - `secretGet/Set/Delete(name, value)`
@@ -301,6 +309,8 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 - an OEM note with deep links for Xiaomi, Samsung, Huawei and Oppo autostart/background settings where they exist (see dontkillmyapp.com); Xiaomi gets four steps (autostart, other permissions, battery saver, lock in Recents).
 - After an update (`MY_PACKAGE_REPLACED`), a notification if a required permission is off: Android 14+ installers may switch full-screen intents off on every update.
 - **WebView:** the web build targets Chrome 91 (`vite.config.ts`); below that Android System WebView version the plugin's `load` shows a native Greek dialog on every start with a Play Store button (the web screens may not run at all), and «Διαγνωστικά» shows the version.
+
+**Crash record:** a `ContentProvider` (`CrashRecorder`, created at process start, before any activity, receiver or service) installs an uncaught-exception handler that keeps the last crash (time, version, exception class, message cut to 160 characters, first app stack frame) in device-protected storage; Rust's panic hook keeps its last panic in `last-crash.json`. On Android 11+ the app also reads Android's own exit history (`ActivityManager.getHistoricalProcessExitReasons`) for native crashes and ANRs since the installed version was installed, which neither handler sees (a crashed WebView renderer ends the app with a native signal). «Διαγνωστικά» shows the newest of the three.
 
 **HTTP client:** a minimal HTTPS POST to the RPC endpoint from Kotlin, using the stored publishable key and device secret.
 

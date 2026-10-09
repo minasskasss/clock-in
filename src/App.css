@@ -18,6 +18,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
+  /* Lined up with the content column below (.app__main > *). */
+  justify-self: center;
+  width: min(100%, 1100px);
 }
 
 .app__brand {
@@ -551,6 +554,8 @@
 
 .list__main {
   display: grid;
+  /* Takes the room and wraps inside it, so the actions stay on the right. */
+  flex: 1 1 18rem;
   gap: var(--space-1);
   min-width: 0;
 }
@@ -568,7 +573,9 @@
 
 .list__actions {
   display: flex;
+  flex: none;
   gap: var(--space-1);
+  margin-left: auto;
 }
 
 .tag {

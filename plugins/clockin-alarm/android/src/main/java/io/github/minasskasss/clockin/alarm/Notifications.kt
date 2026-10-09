@@ -94,11 +94,15 @@ internal object Notifications {
         return PendingIntent.getBroadcast(context, 4, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    /** "Άφιξη: …" and "Αποχώρηση: …" lines for these alarms. */
+    /**
+     * "Άφιξη: …" and "Αποχώρηση: …" lines for these alarms; each name with
+     * its own time when they are due at different minutes.
+     */
     fun nameLines(context: Context, items: List<PlanItem>): String {
         val lines = mutableListOf<String>()
-        val checkIn = items.filter { it.kind == "in" }.map { it.name }.distinct()
-        val checkOut = items.filter { it.kind == "out" }.map { it.name }.distinct()
+        val withTimes = !Ring.oneMinute(items)
+        val checkIn = Ring.names(items, "in", withTimes)
+        val checkOut = Ring.names(items, "out", withTimes)
         if (checkIn.isNotEmpty()) lines += context.getString(R.string.clockin_android_checkInLine, checkIn.joinToString(", "))
         if (checkOut.isNotEmpty()) lines += context.getString(R.string.clockin_android_checkOutLine, checkOut.joinToString(", "))
         return lines.joinToString("\n")

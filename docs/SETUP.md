@@ -277,23 +277,132 @@ The shop PC polls prod all day, so prod won't pause.
 
 ---
 
-## 8. Go-live: your dad's phone, remotely (during Phase 6, with the prod APK)
+## 8. Go-live: your dad's phone, remotely (Phase 6, with the prod APK)
 
-1. **Optional but helpful: AnyDesk on his phone.**
-   - He installs **AnyDesk** from the Play Store, opens it, and reads you his address. You connect and he accepts.
-   - You'll always be able to **see** his screen. **Control** works on many phones, but some ask for an extra AnyDesk plugin or accessibility permission.
-   - If control doesn't work, guide him by phone while watching his screen.
-2. **Send him the APK file** (`clock-in-x.y.z.apk`) via Viber or WhatsApp as a file, or as a Google Drive link.
-3. **On his phone:**
-   - Tap the file. Android asks to allow installs from that app → **Allow from this source** → go back → **Install**.
-   - If **Google Play Protect** warns, tap **More details → Install anyway**. Exact wording varies by brand.
-4. Open **Clock In** → **"Pair this device"** → he types the passphrase from his paper (or you type it over AnyDesk).
-5. **Onboarding checklist:** follow it until everything shows ✓.
-   - Battery must be **Unrestricted / Not optimised**.
-   - On Xiaomi or Samsung, also do the extra step the app shows (autostart / "never sleeping apps").
-6. Choose **Ring** or **Notification**, whichever he prefers.
-7. **Test:** add a test person 3 minutes from now → both the shop PC and the phone alert → Stop on each → delete the test person.
+The phone: **Redmi Note 11S, MIUI 13, Android 11**. You do this from Athens
+by phone call (and AnyDesk if it works on his phone). Allow about 30 minutes.
+Do it when the shop PC is already live on prod (SETUP §7).
 
-**Updates later:** send the new APK the same way → tap → **Update**. **Never uninstall first**; that loses pairing.
+The APK is `C:\dev\clock-in-releases\1.0.0-prod\clock-in-1.0.0.apk` (only
+ever a file from a `-prod` folder). Have the passphrase from your password
+manager ready, and his paper copy at his side.
 
-**Before 2027:** Google's developer verification for sideloaded apps reaches Greece in 2027. RECOVERY.md (Phase 6) lists the steps: a free Android Developer Console registration for small, personal distribution. Do it before then, or new installs may be blocked.
+What to say to him is in *«quotes»*, in plain Greek. MIUI's own words may
+differ slightly; English in brackets.
+
+### 8.0 Optional: AnyDesk on his phone
+
+1. *«Άνοιξε το Play Store, γράψε AnyDesk και πάτα Εγκατάσταση.»*
+2. *«Άνοιξέ το και διάβασέ μου τον αριθμό που γράφει πάνω πάνω.»*
+3. Connect from your laptop; *«πάτα Αποδοχή (Accept)»*. If MIUI asks to
+   allow screen recording / display over other apps, *«πάτα Επιτρέπεται»*.
+4. You can always **see** his screen. If you can't **control** it (some
+   phones need an extra AnyDesk plugin), keep guiding him by voice.
+
+### 8.1 Check the Android System WebView version first
+
+Clock In's screens need version **91 or newer**. Android 11 came with an
+older one, so update it before installing Clock In.
+
+1. *«Άνοιξε το Play Store. Πάνω στην αναζήτηση γράψε: Android System WebView.»*
+2. *«Αν δεις κουμπί Ενημέρωση (Update), πάτα το και περίμενε να τελειώσει.
+   Αν γράφει μόνο Άνοιγμα ή Απεγκατάσταση, είναι ήδη ενημερωμένο.»*
+3. If the Play Store says it is disabled: *«Ρυθμίσεις → Εφαρμογές → Διαχείριση
+   εφαρμογών → οι τρεις τελείες πάνω δεξιά → Εμφάνιση εφαρμογών συστήματος →
+   Android System WebView → Ενεργοποίηση»*, then step 2 again.
+4. (Clock In checks it again later: «Διαγνωστικά» shows the version, and an
+   old one gives a warning every time Clock In opens.)
+
+### 8.2 Install the APK
+
+1. On your laptop, send `clock-in-1.0.0.apk` on **Viber** (or WhatsApp) as a
+   **file**: attach → File / Document → choose it (not as a photo or video).
+2. *«Σου έστειλα ένα αρχείο στο Viber, clock-in-1.0.0. Πάτα πάνω του.»*
+3. MIUI asks whether Viber may install apps:
+   *«Πάτα Ρυθμίσεις (Settings), άνοιξε τον διακόπτη «Να επιτρέπεται από αυτή
+   την πηγή» (Allow from this source), πάτα πίσω και ξαναπάτα το αρχείο.»*
+4. *«Πάτα Εγκατάσταση (Install).»*
+   - MIUI may scan the app first, then show a warning (unknown app / not from
+     the Play Store): *«Πάτα Συνέχεια / Εγκατάσταση ούτως ή άλλως (Install
+     anyway)»*. MIUI may make him wait a few seconds before the button works.
+   - If **Google Play Protect** warns: *«Πάτα Περισσότερες λεπτομέρειες (More
+     details) → Εγκατάσταση ούτως ή άλλως (Install anyway)»*.
+5. *«Πάτα Άνοιγμα (Open).»*
+
+### 8.3 Pair
+
+1. The screen says «Καλώς ήρθατε στο Clock In».
+   *«Πάτα «Σύνδεση αυτής της συσκευής».»* (Never «Ρύθμιση ως πρώτη συσκευή».)
+2. *«Στο «Κωδικός φράση» γράψε τις λέξεις από το χαρτί σου, με ένα κενό
+   ανάμεσα. Μικρά ή κεφαλαία δεν πειράζει.»* (Or you type it over AnyDesk.)
+   «Όνομα συσκευής» is filled in (the phone's name); leave it.
+3. *«Πάτα «Σύνδεση».»* Wrong 5 times locks it for a minute; RECOVERY §2.
+
+### 8.4 The phone checklist (every MIUI step)
+
+After pairing, the screen «Ρυθμίσεις τηλεφώνου» opens. On Android 11 it shows
+**Ειδοποιήσεις**, **Μπαταρία χωρίς περιορισμούς** and the four Xiaomi steps
+(alarms and full screen don't exist as settings on Android 11).
+
+1. **Ειδοποιήσεις**: if ✗ → *«Πάτα «Ρύθμιση». Στη σελίδα που ανοίγει, άνοιξε
+   τον διακόπτη «Εμφάνιση ειδοποιήσεων» (Show notifications), και κάτω στις
+   κατηγορίες άνοιξε το «Χτύπημα για την κάρτα». Μετά πάτα πίσω μέχρι να δεις
+   πάλι το Clock In.»* While there: *«Άνοιξε και το «Οθόνη κλειδώματος» (Lock
+   screen) αν υπάρχει.»*
+2. **Μπαταρία χωρίς περιορισμούς**: *«Πάτα «Ρύθμιση» και μετά «Να
+   επιτρέπεται» (Allow) στο μήνυμα.»*
+3. **Xiaomi step 1, Αυτόματη εκκίνηση (Autostart)**: *«Πάτα «Άνοιγμα» δίπλα
+   στο «Αυτόματη εκκίνηση». Βρες το Clock In και άνοιξε τον διακόπτη του. Πάτα
+   πίσω.»*
+4. **Xiaomi step 2, Άλλα δικαιώματα (Other permissions)**: *«Πάτα «Άνοιγμα».
+   Πάτα «Εμφάνιση αναδυόμενων παραθύρων κατά την εκτέλεση στο παρασκήνιο»
+   (Display pop-up windows while running in the background) → Αποδοχή
+   (Accept). Μετά «Εμφάνιση στην οθόνη κλειδώματος» (Show on Lock screen) →
+   Αποδοχή. Πάτα πίσω.»* This one decides whether the alarm opens over the
+   locked screen.
+5. **Xiaomi step 3, Εξοικονόμηση μπαταρίας (Battery saver)**: *«Πάτα
+   «Άνοιγμα» και διάλεξε «Χωρίς περιορισμούς» (No restrictions). Πάτα πίσω.»*
+6. **Xiaomi step 4, κλείδωμα στις πρόσφατες (lock in Recents)**: *«Πάτα το
+   τετράγωνο κουμπί κάτω (ή σύρε από κάτω προς τα πάνω και κράτα) για να
+   δεις τις ανοιχτές εφαρμογές. Κράτα πατημένο το Clock In και πάτα το
+   λουκέτο. Μετά ξαναπάτα το Clock In για να γυρίσεις.»*
+7. *«Πάτα «Το έκανα».»* Everything shows ✓ → *«Πάτα «Συνέχεια».»*
+
+### 8.5 Alert mode
+
+*«Πάτα ☰ πάνω δεξιά.»* Under «Τρόπος ειδοποίησης σε αυτό το τηλέφωνο»:
+**Χτύπημα** (full screen, alarm sound repeating until «Σταμάτημα», rings even
+on silent and Do Not Disturb) or **Ειδοποίηση** (one ordinary notification,
+quiet during Do Not Disturb). Ask him which he prefers; Χτύπημα is the default.
+
+### 8.6 «Διαγνωστικά» screenshot
+
+1. *«Πάτα ☰ → «Διαγνωστικά».»*
+2. *«Βγάλε φωτογραφία την οθόνη: πάτα μαζί το κάτω κουμπί της έντασης και
+   το κουμπί που ανάβει την οθόνη. Αν δεν χωράει, κατέβα λίγο και βγάλε κι
+   άλλη. Στείλε τις στο Viber.»*
+3. Check (RECOVERY §8): «Clock In 1.0.0 (κανονική)», WebView 91+, the
+   permission lines ✓ or «δεν υπάρχει σε αυτή την έκδοση Android», maker step
+   «σημειώθηκε «Το έκανα»», next alarm shown, «Τελευταίο απρόσμενο κλείσιμο:
+   κανένα».
+4. *«Πάτα «Πίσω».»*
+
+### 8.7 Test alarm on a locked phone
+
+1. On the shop PC (AnyDesk): gear ⚙ → passphrase → Ρυθμίσεις → Προσωπικό →
+   «Νέος εργαζόμενος»: a test person (e.g. «Δοκιμή Δοκιμή») with today's
+   hours starting **3 minutes from now** (if today has no hours yet, add a
+   one-off change «Αλλαγές ημέρας» for today instead).
+2. *«Κλείδωσε το τηλέφωνο (πάτα το κουμπί στο πλάι) και άφησέ το κάτω. Σε 3
+   λεπτά θα χτυπήσει.»*
+3. At the time: the shop PC rings, and the phone's screen lights up with the
+   full-screen alarm and the alarm sound (Χτύπημα mode).
+   *«Πάτα το μεγάλο «Σταμάτημα».»* Press Stop on the shop PC too.
+4. Ask him to open «Διαγνωστικά» again: «Τελευταία ειδοποίηση … άνοιξε σε
+   πλήρη οθόνη». If it says «μόνο ως ειδοποίηση», redo 8.4 step 4.
+5. On the shop PC: Ρυθμίσεις → Προσωπικό → the test person → «Αφαίρεση».
+
+**Updates later:** RECOVERY §6 (send the new APK the same way → tap →
+Ενημέρωση). **Never uninstall first**; that loses the pairing.
+
+**Before 2027:** RECOVERY §13, Android developer verification.
