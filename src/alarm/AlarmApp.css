@@ -77,6 +77,19 @@
   line-height: 1.2;
 }
 
+.alarm__name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+/* Shown only when names joined from different minutes. */
+.alarm__name-time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
 .alarm__silent {
   margin: 0;
   padding: var(--space-3) var(--space-4);

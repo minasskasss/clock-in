@@ -1,16 +1,18 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { AlarmView } from "../api";
+import type { AlarmName, AlarmView } from "../api";
 import { callsTo, mockCommands } from "../test/tauri";
 import { AlarmApp } from "./AlarmApp";
+
+const at = (time: string) => (name: string): AlarmName => ({ name, at: time });
 
 function alarm(overrides: Partial<AlarmView> = {}): AlarmView {
   return {
     id: 3,
     at: "09:00",
-    checkIn: ["Μαρία Παππά", "Νίκος Λάμπρου"],
-    checkOut: ["Ελένη Ιωάννου"],
+    checkIn: ["Μαρία Παππά", "Νίκος Λάμπρου"].map(at("09:00")),
+    checkOut: ["Ελένη Ιωάννου"].map(at("09:00")),
     ringing: true,
     reringAt: null,
     ...overrides,
@@ -29,6 +31,29 @@ describe("AlarmApp", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Σταμάτημα" })).not.toHaveFocus();
     expect(screen.getByText(/δεν σημειώνει κανέναν/)).toBeInTheDocument();
+  });
+
+  it("shows each name's own time when names joined from different minutes", async () => {
+    const view = alarm({
+      at: null,
+      checkIn: [at("04:59")("Μαρία Παππά"), at("05:12")("Νίκος Λάμπρου")],
+      checkOut: [at("05:12")("Ελένη Ιωάννου")],
+    });
+    mockCommands({ alarm_state: { alarm: view, autoDark: false } });
+    render(<AlarmApp />);
+    const checkIn = await screen.findByRole("region", { name: "Άφιξη" });
+    const items = Array.from(checkIn.querySelectorAll("li")).map((li) => li.textContent);
+    expect(items).toEqual(["04:59Μαρία Παππά", "05:12Νίκος Λάμπρου"]);
+    expect(screen.getByRole("region", { name: "Αποχώρηση" })).toHaveTextContent("05:12Ελένη Ιωάννου");
+    // No single time in the header.
+    expect(document.querySelector(".alarm__time")).toBeNull();
+  });
+
+  it("shows one time in the header when every name shares it", async () => {
+    mockCommands({ alarm_state: { alarm: alarm(), autoDark: false } });
+    render(<AlarmApp />);
+    expect(await screen.findByText("09:00")).toBeInTheDocument();
+    expect(document.querySelectorAll(".alarm__name-time")).toHaveLength(0);
   });
 
   it("hides an empty section", async () => {

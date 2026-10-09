@@ -189,9 +189,13 @@ class AlarmActivity : Activity() {
             finish()
             return
         }
+        // One time on top when every name shares it; otherwise each name
+        // shows its own (names that joined a ringing alarm later).
+        val oneMinute = Ring.oneMinute(active.items)
         time.text = Ring.hhmm(active.items.minOf { it.firesAtMs })
-        val checkIn = active.items.filter { it.kind == "in" }.map { it.name }.distinct()
-        val checkOut = active.items.filter { it.kind == "out" }.map { it.name }.distinct()
+        time.visibility = if (oneMinute) View.VISIBLE else View.GONE
+        val checkIn = Ring.names(active.items, "in", withTimes = !oneMinute)
+        val checkOut = Ring.names(active.items, "out", withTimes = !oneMinute)
         checkInNames.text = checkIn.joinToString("\n")
         checkOutNames.text = checkOut.joinToString("\n")
         val inVisibility = if (checkIn.isEmpty()) View.GONE else View.VISIBLE
