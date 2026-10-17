@@ -60,6 +60,16 @@ pub struct AndroidView {
     permissions_ok: bool,
     /// A ring-mode alarm in progress on this phone: Today shows «Σταμάτημα».
     alarm: Option<AlarmBanner>,
+    /// A «Λείπει σήμανση» reminder showing on this phone: Today shows «Εντάξει».
+    reminder: Option<ReminderBanner>,
+}
+
+/// The «Λείπει σήμανση» reminder showing on the phone, for the bar on Today.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderBanner {
+    group_ids: Vec<i64>,
+    names: Vec<String>,
 }
 
 /// The ringing (or silent-between-rings) alarm, for the bar on Today.
@@ -131,6 +141,14 @@ fn android_view(app: &tauri::AppHandle, state: &AppState) -> Option<AndroidView>
             check_in: a.check_in,
             check_out: a.check_out,
         });
+    let reminder = android
+        .as_ref()
+        .map(|a| a.reminder())
+        .filter(|r| !r.group_ids.is_empty())
+        .map(|r| ReminderBanner {
+            group_ids: r.group_ids,
+            names: r.names,
+        });
     Some(AndroidView {
         alert_mode: state.alert_mode(),
         permissions_ok: permissions
@@ -138,6 +156,7 @@ fn android_view(app: &tauri::AppHandle, state: &AppState) -> Option<AndroidView>
             .is_none_or(tauri_plugin_clockin_alarm::PermissionStatus::all_granted),
         permissions,
         alarm,
+        reminder,
     })
 }
 
@@ -211,6 +230,33 @@ pub async fn android_stop_alarm(app: tauri::AppHandle) -> Result<(), CmdError> {
             && let Some(android) = app.try_state::<Arc<crate::android::Android>>()
         {
             android.set_alarm(alarm);
+        }
+    }
+    Ok(())
+}
+
+/// «Εντάξει» on the Today bar: ends the «Λείπει σήμανση» reminders shown on
+/// this phone. It marks nobody (SPEC §7.6).
+#[tauri::command]
+#[cfg_attr(
+    not(target_os = "android"),
+    allow(unused_variables, clippy::unused_async, clippy::needless_pass_by_value)
+)]
+pub async fn android_reminder_ok(
+    app: tauri::AppHandle,
+    group_ids: Vec<i64>,
+) -> Result<(), CmdError> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let ids = group_ids.clone();
+        if let Some(Err(e)) = crate::android::bridge(&app, move |b| b.reminder_ok(&ids)).await {
+            return Err(CmdError::internal(e));
+        }
+        if let Some(Ok(reminder)) = crate::android::bridge(&app, |b| b.reminder_status()).await
+            && let Some(android) = app.try_state::<Arc<crate::android::Android>>()
+        {
+            android.set_reminder(reminder);
         }
     }
     Ok(())

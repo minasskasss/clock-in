@@ -2,7 +2,6 @@ package io.github.minasskasss.clockin.alarm
 
 import android.app.Activity
 import android.content.Intent
-import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -40,28 +39,9 @@ class AlarmActivity : Activity() {
     private lateinit var silent: TextView
     private val listener: () -> Unit = { render() }
 
-    private val systemDark: Boolean
-        get() = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-
-    /**
-     * The app's theme choice. "Αυτόματο" uses the dark periods Rust computed
-     * with the core's rule (dark from 21:00 until the business day ends);
-     * without them yet, the phone's own setting.
-     */
+    /** The app's theme choice ([AppTheme.dark]). */
     private val dark: Boolean
-        get() {
-            val store = Store.get(this)
-            return when (store.theme()) {
-                "light" -> false
-                "dark" -> true
-                "auto" -> {
-                    val windows = store.darkWindows()
-                    val now = System.currentTimeMillis()
-                    if (windows.isEmpty()) systemDark else windows.any { (start, end) -> now >= start && now < end }
-                }
-                else -> systemDark
-            }
-        }
+        get() = AppTheme.dark(this)
 
     private fun dp(value: Float): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics).toInt()

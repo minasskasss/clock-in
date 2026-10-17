@@ -18,15 +18,28 @@ internal data class PlanItem(
     /** "in" or "out". */
     val kind: String,
     val name: String,
+    /**
+     * What «Σήμανση» on the reminder screen marks (SPEC §7.6): lowercase
+     * uuids and the ISO business date. Empty in plans stored by 1.0.0.
+     */
+    val staffId: String = "",
+    val sourceBlockId: String = "",
+    val businessDate: String = "",
 ) {
     /** "Already rung / stopped" state is keyed by (item_id, fires_at). */
     val key: String get() = "$itemId|$firesAtMs"
+
+    /** Whether «Σήμανση» can mark it. */
+    val markable: Boolean get() = staffId.isNotEmpty() && sourceBlockId.isNotEmpty() && businessDate.isNotEmpty()
 
     fun toJson(): JSONObject = JSONObject()
         .put("itemId", itemId)
         .put("firesAt", firesAt)
         .put("kind", kind)
         .put("name", name)
+        .put("staffId", staffId)
+        .put("sourceBlockId", sourceBlockId)
+        .put("businessDate", businessDate)
 
     companion object {
         fun parseInstantMs(iso: String): Long? =
@@ -36,10 +49,18 @@ internal data class PlanItem(
                 null
             }
 
-        fun of(itemId: String, firesAt: String, kind: String, name: String): PlanItem? {
+        fun of(
+            itemId: String,
+            firesAt: String,
+            kind: String,
+            name: String,
+            staffId: String = "",
+            sourceBlockId: String = "",
+            businessDate: String = "",
+        ): PlanItem? {
             val ms = parseInstantMs(firesAt) ?: return null
             if (kind != "in" && kind != "out") return null
-            return PlanItem(itemId, firesAt, ms, kind, name)
+            return PlanItem(itemId, firesAt, ms, kind, name, staffId, sourceBlockId, businessDate)
         }
 
         /** Rust's own form (`toJson`) or the server's `get_plan` item. */
@@ -48,6 +69,9 @@ internal data class PlanItem(
             o.optString("firesAt", o.optString("fires_at")),
             o.optString("kind"),
             o.optString("name", o.optString("display_name")),
+            o.optString("staffId", o.optString("staff_id")),
+            o.optString("sourceBlockId", o.optString("source_block_id")),
+            o.optString("businessDate", o.optString("business_date")),
         )
     }
 }
@@ -67,6 +91,19 @@ internal data class Active(
     val ringStartedAtMs: Long,
     /** When a silent cycle rings again; null while ringing. */
     val reringAtMs: Long?,
+)
+
+/**
+ * The alarms one «Σταμάτημα» ended (or one notification-mode alarm posted),
+ * and how far their «Λείπει σήμανση» reminders have got (SPEC §7.6).
+ */
+internal data class ReminderGroup(
+    val id: Long,
+    val items: List<PlanItem>,
+    /** When «Σταμάτημα» was pressed (notification mode: when it was posted). */
+    val startedAtMs: Long,
+    /** The last reminder shown with its sound (0: none yet). */
+    val shown: Int,
 )
 
 /**
@@ -119,7 +156,7 @@ internal class Store private constructor(private val prefs: SharedPreferences) {
     }
 
     fun clearPlan() {
-        prefs.edit().remove("plan").remove("active").commit()
+        prefs.edit().remove("plan").remove("active").remove("reminders").commit()
     }
 
     // --- Per-device settings ------------------------------------------------
@@ -151,6 +188,68 @@ internal class Store private constructor(private val prefs: SharedPreferences) {
 
     fun countNotificationRequest() {
         prefs.edit().putInt("notification_requests", notificationRequests() + 1).commit()
+    }
+
+    // --- «Λείπει σήμανση» reminders (SPEC §7.6) --------------------------------
+
+    /** The delay in minutes (0 = off); the server's default until Rust or the server says. */
+    fun reminderMin(): Int = prefs.getInt("reminder_min", 10)
+
+    fun setReminderMin(minutes: Int) {
+        prefs.edit().putInt("reminder_min", minutes).commit()
+    }
+
+    /** When each business date ends, epoch ms (computed by Rust, `clockin-core::reminder_cutoff`). */
+    fun dayEnds(): Map<String, Long> {
+        val raw = prefs.getString("day_ends", null) ?: return emptyMap()
+        return try {
+            val o = JSONObject(raw)
+            o.keys().asSequence().associateWith { o.getLong(it) }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    fun setDayEnds(ends: Map<String, Long>) {
+        val o = JSONObject()
+        ends.forEach { (date, end) -> o.put(date, end) }
+        prefs.edit().putString("day_ends", o.toString()).commit()
+    }
+
+    fun reminders(): List<ReminderGroup> {
+        val raw = prefs.getString("reminders", null) ?: return emptyList()
+        return try {
+            val a = JSONArray(raw)
+            (0 until a.length()).map { i ->
+                val o = a.getJSONObject(i)
+                val items = o.getJSONArray("items")
+                ReminderGroup(
+                    o.getLong("id"),
+                    (0 until items.length()).mapNotNull { PlanItem.fromJson(items.getJSONObject(it)) },
+                    o.getLong("startedAtMs"),
+                    o.optInt("shown", 0),
+                )
+            }.filter { it.items.isNotEmpty() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setReminders(groups: List<ReminderGroup>) {
+        val a = JSONArray()
+        groups.filter { it.items.isNotEmpty() }.forEach { g ->
+            val items = JSONArray()
+            g.items.forEach { items.put(it.toJson()) }
+            a.put(JSONObject().put("id", g.id).put("items", items).put("startedAtMs", g.startedAtMs).put("shown", g.shown))
+        }
+        prefs.edit().putString("reminders", a.toString()).commit()
+    }
+
+    /** A new group id (never reused on this phone). */
+    fun nextReminderId(): Long {
+        val id = prefs.getLong("reminder_next_id", 1)
+        prefs.edit().putLong("reminder_next_id", id + 1).commit()
+        return id
     }
 
     // --- The alarm screen's theme (SPEC §3) ----------------------------------

@@ -9,7 +9,8 @@
 --   resets the new value. 1.1.0 calls `settings_update_v2`, a separate name
 --   rather than an extra defaulted argument, so PostgREST never has to pick
 --   between overloads and 1.0.0's request is untouched.
--- - `get_snapshot` and `get_plan` only gain a key; 1.0.0 ignores unknown keys
+-- - `get_snapshot` and `get_plan` only gain a key (and `get_plan` returns
+--   the whole uploaded plan, see below); 1.0.0 ignores unknown keys
 --   (serde without `deny_unknown_fields`; Kotlin `org.json` with `opt…`).
 --   `create or replace` keeps their grants.
 
@@ -124,6 +125,11 @@ begin
 end;
 $$;
 
+-- The whole uploaded plan (1.1.0 uploads reach back to the previous business
+-- day, `clockin-core::upload_window`), so a phone that takes this plan while
+-- an alarm is still ringing, or silent between rings, keeps its names.
+-- Phones never fire an item more than 15 minutes late (1.0.0 neither), so the
+-- older items only keep names, they don't ring.
 create or replace function public.get_plan(p_secret text) returns jsonb
 language plpgsql volatile security definer set search_path = ''
 as $$
@@ -143,8 +149,7 @@ begin
                'business_date', p.business_date, 'source_block_id', p.source_block_id)
                order by p.fires_at, p.kind, p.item_id), '[]')
       into v_items
-      from app.alarm_plan p
-     where p.fires_at >= now() - interval '15 minutes';
+      from app.alarm_plan p;
     return app.ok(jsonb_build_object(
         'plan_config_version', m.plan_config_version,
         'horizon_end', m.plan_horizon_end,

@@ -1548,8 +1548,9 @@ async fn compatible_with_1_0_0_clients() {
     );
 
     // 1.0.0's plan: a plan uploaded by 1.1.0 (reaching back a business day)
-    // decodes item by item, and `get_plan` still returns only items from 15
-    // minutes ago on, so a 1.0.0 phone schedules exactly what it did.
+    // comes back whole from `get_plan` and decodes item by item. A 1.0.0
+    // phone schedules exactly what it did (it never fires an item more than
+    // 15 minutes late), and a long-ringing alarm there keeps its names.
     let every_day = [
         Weekday::Monday,
         Weekday::Tuesday,
@@ -1585,10 +1586,10 @@ async fn compatible_with_1_0_0_clients() {
     assert_eq!(body["ok"], true);
     assert_eq!(body["unmarked_reminder_min"], 25);
     let old: Vec<PlanItem100> = serde_json::from_value(body["items"].clone()).unwrap();
-    assert!(!old.is_empty());
+    assert_eq!(old.len(), items.len());
     assert!(
         old.iter()
-            .all(|i| i.fires_at >= now - SignedDuration::from_mins(16))
+            .any(|i| i.item_id == past.item_id && i.fires_at == past.fires_at)
     );
     assert_eq!(
         api.get_plan(secret).await.unwrap().unmarked_reminder_min,

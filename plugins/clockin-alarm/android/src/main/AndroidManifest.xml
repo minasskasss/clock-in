@@ -40,6 +40,25 @@
             android:exported="false"
             android:foregroundServiceType="systemExempted|mediaPlayback" />
 
+        <!-- Shows one «Λείπει σήμανση» reminder: started from its exact alarm, stops within seconds. -->
+        <service
+            android:name=".ReminderService"
+            android:directBootAware="true"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted|mediaPlayback" />
+
+        <!-- The «Λείπει σήμανση» screen, also over the lock screen. -->
+        <activity
+            android:name=".ReminderActivity"
+            android:directBootAware="true"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="io.github.minasskasss.clockin.reminder"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+            android:turnScreenOn="true" />
+
         <!-- The full-screen alarm, also over the lock screen. -->
         <activity
             android:name=".AlarmActivity"
@@ -52,13 +71,13 @@
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
             android:turnScreenOn="true" />
 
-        <!-- Exact alarms and re-rings. -->
+        <!-- Exact alarms, re-rings and reminders. -->
         <receiver
             android:name=".AlarmReceiver"
             android:directBootAware="true"
             android:exported="false" />
 
-        <!-- «Σταμάτημα» on a notification. -->
+        <!-- «Σταμάτημα» and «Εντάξει» on a notification. -->
         <receiver
             android:name=".StopReceiver"
             android:directBootAware="true"

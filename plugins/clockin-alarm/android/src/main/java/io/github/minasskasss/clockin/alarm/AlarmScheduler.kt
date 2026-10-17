@@ -109,5 +109,9 @@ internal object AlarmScheduler {
                 if (operation != null) set(context, maxOf(rering, now + 1_000), operation)
             }
         }
+        // «Λείπει σήμανση» reminders have their own alarm (separate action and
+        // request code) and are rescheduled on the same occasions: boot, an
+        // update, a clock change, a new plan, and the end of every alarm.
+        Reminders.schedule(context)
     }
 }
