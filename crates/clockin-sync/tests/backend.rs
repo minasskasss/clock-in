@@ -159,7 +159,7 @@ async fn dev() -> Dev {
          delete from app.devices where true;
          update app.auth_state set passphrase_hash = null, failed_count = 0, locked_until = null where id;
          update app.settings set checkin_offset_min = 0, checkout_offset_min = 0, rollover = '05:00',
-                                 autostart = true, quit_code = null where id;
+                                 autostart = true, quit_code = null, unmarked_reminder_min = 10 where id;
          update app.meta set plan_config_version = config_version, plan_horizon_end = null where id;",
     )
     .await
@@ -1505,7 +1505,7 @@ async fn compatible_with_1_0_0_clients() {
                               autostart, quit_code) from app.settings"
         )
         .await,
-        "-10,5,04:00:00,false,1357"
+        "-10,5,04:00:00,f,1357"
     );
 
     // 1.0.0's snapshot decoding: the settings object gained one key only.

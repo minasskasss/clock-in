@@ -134,6 +134,7 @@ fn android_view(app: &tauri::AppHandle, state: &AppState) -> Option<AndroidView>
     let android = app.try_state::<Arc<crate::android::Android>>();
     let permissions = android.as_ref().and_then(|a| a.status());
     let alarm = android
+        .as_ref()
         .map(|a| a.alarm())
         .filter(|a| a.active)
         .map(|a| AlarmBanner {
