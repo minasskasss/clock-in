@@ -4,6 +4,7 @@ import {
   api,
   type AlarmBanner,
   type Banners as BannerState,
+  type ReminderBanner,
   type MarkKind,
   type Platform,
   type RefusedMark,
@@ -44,6 +45,9 @@ interface TodayProps {
   /** Android: a ring-mode alarm in progress on this phone. */
   alarm?: AlarmBanner | null;
   onStopAlarm?: () => void;
+  /** Android: a «Λείπει σήμανση» reminder showing on this phone. */
+  reminder?: ReminderBanner | null;
+  onReminderOk?: (groupIds: number[]) => void;
   /** Called after a mark so the screen updates at once. */
   onChanged: () => void;
 }
@@ -57,6 +61,8 @@ export function Today({
   onFixPermissions,
   alarm = null,
   onStopAlarm,
+  reminder = null,
+  onReminderOk,
   onChanged,
 }: TodayProps) {
   const { t } = useTranslation();
@@ -84,6 +90,7 @@ export function Today({
   return (
     <section className="today" aria-labelledby="today-heading">
       {alarm && <AlarmBar alarm={alarm} onStop={() => onStopAlarm?.()} />}
+      {reminder && <ReminderBar reminder={reminder} onOk={() => onReminderOk?.(reminder.groupIds)} />}
       <div className="today__head">
         <h1 id="today-heading" className="today__date">
           {heading && (
@@ -170,7 +177,10 @@ function RowItem({ row, onTap }: { row: Row; onTap: (kind: MarkKind) => void }) 
         <span className="row__first">{row.firstName}</span> <span className="row__last">{row.lastName}</span>
       </span>
       <span className="row__hours">{formatHours(t, row)}</span>
-      <span className="row__status">{t(STATUS_LABEL[row.status])}</span>
+      <span className={`row__status${row.noArrivalMark ? " row__status--noted" : ""}`}>
+        {t(STATUS_LABEL[row.status])}
+        {row.noArrivalMark && <span className="row__note">{t("today.noArrivalMark")}</span>}
+      </span>
     </>
   );
   const className = `row ${STATUS_CLASS[row.status]}`;
@@ -210,6 +220,24 @@ function AlarmBar({ alarm, onStop }: { alarm: AlarmBanner; onStop: () => void })
         {t("alarm.stop")}
       </button>
       <p className="alarm-bar__note">{t("alarm.note")}</p>
+    </div>
+  );
+}
+
+/**
+ * Android: a «Λείπει σήμανση» reminder showing on this phone, with
+ * «Εντάξει», so it can be ended even if its notification was swiped away.
+ * Marking is done on the rows below.
+ */
+function ReminderBar({ reminder, onOk }: { reminder: ReminderBanner; onOk: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="alarm-bar alarm-bar--reminder" role="alert">
+      <p className="alarm-bar__title">{t("today.reminderBar", { names: reminder.names.join(", ") })}</p>
+      <button type="button" className="button button--primary button--large alarm-bar__stop" onClick={onOk}>
+        {t("today.reminderOk")}
+      </button>
+      <p className="alarm-bar__note">{t("reminder.note")}</p>
     </div>
   );
 }

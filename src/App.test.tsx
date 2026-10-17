@@ -40,7 +40,7 @@ describe("App", () => {
     const calls = mockCommands({
       app_state: appState({
         platform: "android",
-        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
+        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null, reminder: null },
       }),
       android_insets: { top: 24, right: 0, bottom: 48, left: 0 },
     });

@@ -43,7 +43,7 @@ async function openDiagnostics(view: DiagnosticsView) {
   mockCommands({
     app_state: appState({
       platform: "android",
-      android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
+      android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null, reminder: null },
     }),
     android_diagnostics: view,
   });
@@ -61,7 +61,7 @@ describe("Diagnostics", () => {
     mockCommands({
       app_state: appState({
         platform: "android",
-        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
+        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null, reminder: null },
       }),
       android_diagnostics: diagnostics(),
     });

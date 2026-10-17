@@ -249,6 +249,21 @@
   text-decoration-thickness: 4px;
 }
 
+/* «Έφυγε» marked from the reminder without an arrival mark: the same green
+   «Έφυγε» row, with a small note under the status. */
+.row__status--noted {
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.row__note {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
 /* Narrow Windows windows (Android phones have their own layout below). */
 @media (max-width: 560px) {
   :root:not([data-platform="android"]) .row {

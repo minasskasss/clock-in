@@ -31,7 +31,12 @@ export interface Row {
   endNextDay: boolean;
   status: RowStatus;
   nextMark: MarkKind | null;
+  /** «Έφυγε» without an arrival mark (a departure marked from the reminder). */
+  noArrivalMark: boolean;
 }
+
+/** What a mark is for: one block of one business date. */
+export type MarkTarget = Pick<Row, "staffId" | "sourceBlockId" | "businessDate">;
 
 export interface TodayView {
   businessDate: string;
@@ -119,6 +124,14 @@ export interface AndroidView {
   permissionsOk: boolean;
   /** A ring-mode alarm in progress on this phone (Today shows «Σταμάτημα»). */
   alarm: AlarmBanner | null;
+  /** A «Λείπει σήμανση» reminder showing on this phone (Today shows «Εντάξει»). */
+  reminder: ReminderBanner | null;
+}
+
+export interface ReminderBanner {
+  /** Pass back to `androidReminderOk`. */
+  groupIds: number[];
+  names: string[];
 }
 
 export interface AlarmBanner {
@@ -192,6 +205,32 @@ export interface AlarmStateView {
   autoDark: boolean;
 }
 
+/** The «Λείπει σήμανση» reminder window's content (SPEC §7.6). */
+export interface ReminderView {
+  /** Pass back to `reminderOk` («Εντάξει»). */
+  groupIds: number[];
+  checkIn: ReminderLine[];
+  checkOut: ReminderLine[];
+  /** When it reminds again; null for the last one of the business day. */
+  nextAt: string | null;
+}
+
+/** One name on the reminder, with what «Σήμανση» marks. */
+export interface ReminderLine extends MarkTarget {
+  name: string;
+  /** The alarm time, "HH:MM". */
+  at: string;
+  kind: MarkKind;
+  /** A departure whose arrival was never marked either. */
+  noArrivalMark: boolean;
+}
+
+export interface ReminderStateView {
+  /** Null once nobody is left (the window is about to close). */
+  reminder: ReminderView | null;
+  autoDark: boolean;
+}
+
 export interface BlockView {
   id: string;
   start: string;
@@ -227,6 +266,8 @@ export interface SettingsView {
   checkoutOffsetMin: number;
   rollover: string;
   autostart: boolean;
+  /** Minutes after «Σταμάτημα» before the «Λείπει σήμανση» reminder; 0 = off. */
+  unmarkedReminderMin: number;
 }
 
 export interface MarkView {
@@ -338,11 +379,11 @@ export const api = {
   initialize: (passphrase: string, quitCode: string, deviceName: string) =>
     call<void>("initialize", { passphrase, quitCode, deviceName }),
   pair: (passphrase: string, deviceName: string) => call<void>("pair", { passphrase, deviceName }),
-  mark: (row: Row, kind: MarkKind) =>
+  mark: (target: MarkTarget, kind: MarkKind) =>
     call<void>("mark", {
-      staffId: row.staffId,
-      sourceBlockId: row.sourceBlockId,
-      businessDate: row.businessDate,
+      staffId: target.staffId,
+      sourceBlockId: target.sourceBlockId,
+      businessDate: target.businessDate,
       kind,
     }),
   dismissRefusedMark: (id: string) => call<void>("dismiss_refused_mark", { id }),
@@ -365,6 +406,8 @@ export const api = {
     rollover: string;
     autostart: boolean;
     quitCode: string | null;
+    /** Left out: the current value is kept. */
+    unmarkedReminderMin?: number;
   }) => call<void>("settings_save", s),
   markVoid: (id: string) => call<void>("mark_void", { id }),
   deviceRevoke: (id: string) => call<void>("device_revoke", { id }),
@@ -373,6 +416,8 @@ export const api = {
   generatePassphrase: () => call<string>("generate_passphrase"),
   alarmState: () => call<AlarmStateView>("alarm_state"),
   alarmStop: (id: number) => call<void>("alarm_stop", { id }),
+  reminderState: () => call<ReminderStateView>("reminder_state"),
+  reminderOk: (groupIds: number[]) => call<void>("reminder_ok", { groupIds }),
   /** Exits the app if `code` is the quit code; otherwise rejects. */
   quit: (code: string) => call<void>("quit", { code }),
   debugSetClock: (local: string | null, second = false) => call<void>("debug_set_clock", { local, second }),
@@ -384,6 +429,7 @@ export const api = {
   androidOpenSettings: (kind: PermissionKind) => call<void>("android_open_settings", { kind }),
   androidSetOemDone: (done: boolean) => call<void>("android_set_oem_done", { done }),
   androidStopAlarm: () => call<void>("android_stop_alarm"),
+  androidReminderOk: (groupIds: number[]) => call<void>("android_reminder_ok", { groupIds }),
   androidDiagnostics: () => call<DiagnosticsView | null>("android_diagnostics"),
   androidInsets: () => call<Insets | null>("android_insets"),
   setTheme: (theme: "auto" | "system" | "light" | "dark") => call<void>("set_theme", { theme }),

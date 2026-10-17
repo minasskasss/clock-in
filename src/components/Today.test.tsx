@@ -36,6 +36,47 @@ describe("Today view", () => {
     expect(screen.queryByRole("button", { name: /Γιώργος/ })).not.toBeInTheDocument();
   });
 
+  it("shows a departure without an arrival as a normal «Έφυγε» row with a small note", () => {
+    render(
+      <Today {...windows}
+        today={today([
+          row({ key: "b1", status: "left", nextMark: null, noArrivalMark: true }),
+          row({ key: "b2", sourceBlockId: "b2", firstName: "Νίκος", lastName: "Αλεξίου", status: "left", nextMark: null }),
+        ])}
+        banners={noBanners}
+        onChanged={() => {}}
+      />,
+    );
+    const [noted, plain] = screen.getAllByRole("listitem") as [HTMLElement, HTMLElement];
+    // The same green «Έφυγε» row with the line through it: never amber, not tappable.
+    const notedRow = noted.querySelector(".row");
+    expect(notedRow).toHaveClass("row--left");
+    expect(notedRow).not.toHaveClass("row--due");
+    expect(within(noted).getByText("Έφυγε")).toBeInTheDocument();
+    expect(within(noted).getByText("χωρίς σήμανση άφιξης")).toBeInTheDocument();
+    expect(within(noted).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(plain).queryByText("χωρίς σήμανση άφιξης")).not.toBeInTheDocument();
+  });
+
+  it("Android: a reminder showing on the phone gets a bar with «Εντάξει»", async () => {
+    const onReminderOk = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Today
+        {...windows}
+        platform="android"
+        today={today()}
+        banners={noBanners}
+        reminder={{ groupIds: [4, 5], names: ["Μαρία Παππά", "Νίκος Αλεξίου"] }}
+        onReminderOk={onReminderOk}
+        onChanged={() => {}}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Λείπει σήμανση: Μαρία Παππά, Νίκος Αλεξίου");
+    await user.click(screen.getByRole("button", { name: "Εντάξει" }));
+    expect(onReminderOk).toHaveBeenCalledWith([4, 5]);
+  });
+
   it("asks before marking a check-in, then sends it", async () => {
     const calls = mockCommands({ mark: null });
     const onChanged = vi.fn();

@@ -8,6 +8,8 @@ import { useAdmin } from "./admin";
 const OFFSET_MIN = -60;
 const OFFSET_MAX = 30;
 const ROLLOVERS = ["00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00", "07:00", "08:00"];
+/** «Λείπει σήμανση» choices in minutes; 0 = off (SPEC §4.4). */
+const REMINDERS = [0, 5, 10, 15, 20, 30, 45, 60];
 
 /** Every 5 minutes in range, plus the current value if it is in between. */
 function offsetChoices(current: number): number[] {
@@ -17,7 +19,8 @@ function offsetChoices(current: number): number[] {
 }
 
 /**
- * Settings → offsets, rollover, autostart (SPEC §4.4). The quit code is under Codes.
+ * Settings → offsets, rollover, the «Λείπει σήμανση» reminder, autostart
+ * (SPEC §4.4). The quit code is under Codes.
  * Autostart is the shop PC's setting: Android doesn't show it and saves the
  * server's latest value, so a change made on the PC stays.
  */
@@ -29,6 +32,10 @@ export function AlarmsPanel({ platform }: { platform: Platform }) {
   const [checkout, setCheckout] = useState(s.checkoutOffsetMin);
   const [rollover, setRollover] = useState(s.rollover);
   const [autostart, setAutostart] = useState(s.autostart);
+  const [reminder, setReminder] = useState(s.unmarkedReminderMin);
+  const reminders = REMINDERS.includes(s.unmarkedReminderMin)
+    ? REMINDERS
+    : [...REMINDERS, s.unmarkedReminderMin].sort((a, b) => a - b);
   const showAutostart = platform !== "android";
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -50,6 +57,7 @@ export function AlarmsPanel({ platform }: { platform: Platform }) {
           rollover,
           autostart: showAutostart ? autostart : view.settings.autostart,
           quitCode: null,
+          unmarkedReminderMin: reminder,
         }),
       );
       setMessage({ tone: "ok", text: t("alarms.saved") });
@@ -91,6 +99,15 @@ export function AlarmsPanel({ platform }: { platform: Platform }) {
             {rollovers.map((r) => (
               <option key={r} value={r}>
                 {r}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t("alarms.reminder")} hint={t("alarms.reminderHint")}>
+          <select className="input" value={reminder} onChange={(e) => setReminder(Number(e.target.value))} disabled={busy}>
+            {reminders.map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? t("alarms.reminderOff") : t("alarms.reminderAfter", { count: m })}
               </option>
             ))}
           </select>
