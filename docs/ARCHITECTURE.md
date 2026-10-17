@@ -88,7 +88,7 @@ C:\dev\clock-in\
 | `schedule_blocks` | `id uuid pk`, `staff_id fk`, `weekday smallint 1–7` (Mon=1, business day), `start_time time`, `end_time time` |
 | `overrides` | `id uuid pk`, `staff_id fk`, `business_date date`, `kind text ('off','replace')`, unique (`staff_id`, `business_date`) |
 | `override_blocks` | `id uuid pk`, `override_id fk on delete cascade`, `start_time`, `end_time` |
-| `settings` | singleton row: `checkin_offset_min`, `checkout_offset_min`, `rollover time`, `autostart bool`, `quit_code char(4)` |
+| `settings` | singleton row: `checkin_offset_min`, `checkout_offset_min`, `rollover time`, `autostart bool`, `quit_code char(4)`, `unmarked_reminder_min int` (1.1.0; default 10, 0 … 60, 0 = off) |
 | `marks` | `id uuid pk` (client-generated, makes inserts idempotent), `staff_id`, `source_block_id uuid`, `business_date`, `kind ('in','out')`, `marked_at timestamptz` (server time), `device_id`, `voided_at null` |
 | `devices` | `id uuid pk`, `name`, `platform`, `secret_hash bytea` (SHA-256), `created_at`, `last_seen_at`, `revoked_at null` |
 | `auth_state` | singleton: `passphrase_hash text null` (bcrypt), `failed_count int`, `locked_until timestamptz null` |
@@ -164,13 +164,13 @@ Error codes: `bad_secret`, `revoked`, `locked` (plus `retry_after_s`), `bad_pass
   - active staff, plus removed staff that still have marks in the window;
   - blocks;
   - overrides and override blocks from today onward;
-  - settings, including `quit_code`;
+  - settings, including `quit_code` and (1.1.0) `unmarked_reminder_min`;
   - non-voided marks for the last 2 business days and today;
   - devices (name, platform and `last_seen` only);
   - all versions, and `server_now`.
 - `mark(client_id, staff_id, source_block_id, business_date, kind)` is idempotent on `client_id`.
 - `upload_plan(base_config_version, horizon_end, items[])` replaces `alarm_plan` atomically. It returns `version_conflict` if `config_version` has changed since.
-- `get_plan()` returns `plan_config_version`, `horizon_end` and the items from now − 15 min onward.
+- `get_plan()` returns `plan_config_version`, `horizon_end`, `unmarked_reminder_min` (1.1.0) and the whole uploaded plan. Until 1.0.0 it returned the items from now − 15 min onward; since 1.1.0 uploads reach back a business day (§8), the older items keep the names of an alarm still ringing, or of a reminder, on a phone that takes a new plan. Phones never fire an item more than 15 minutes late, so the older items never ring.
 - `check_alarm(item_ids[])` returns, per item, `due: bool`. `due` is false if the item is gone from the plan or the matching mark exists. It also returns `config_version`.
 - `admin_login(passphrase)` returns a `session_token`.
 
@@ -179,7 +179,8 @@ Error codes: `bad_secret`, `revoked`, `locked` (plus `retry_after_s`), `bad_pass
 - `staff_create(first, last, blocks[])`, `staff_update(id, first, last)`, `staff_remove(id)`
 - `schedule_set(staff_id, blocks[])` replaces the whole weekly template atomically.
 - `override_set(staff_id, business_date, kind, blocks[])`, `override_delete(id)`
-- `settings_update(...)` covers offsets, rollover, autostart and quit code.
+- `settings_update(...)` covers offsets, rollover, autostart and quit code. It is 1.0.0's call and stays unchanged, so a 1.0.0 device never resets the reminder setting.
+- `settings_update_v2(...)` (1.1.0) covers the same plus `unmarked_reminder_min` (0 … 60). A new name rather than an extra defaulted argument, so PostgREST never has to choose between overloads.
 - `mark_void(mark_id)` corrects a mistaken mark.
 - `device_revoke(device_id)`
 - `change_passphrase(old, new)`, `admin_logout()`
@@ -201,13 +202,17 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 - `due_events(plan, marks, window)` groups items by minute and applies suppression.
 - `ring_cycle_state(started_at, now)` returns ringing, silent, or the next re-ring time.
 - `validate_week(blocks)` and `validate_override(blocks)` check durations and overlaps.
+- `upload_window(now, rollover)`: the plan window a device uploads (§8) and sends to the Android plugin (§10).
+- `ReminderScheduler` (1.1.0, SPEC §7.6): groups started by Stop (`AlarmScheduler::stop` returns the stopped alarms). Reminder k of a group is due at Stop + k·N real minutes. `evaluate(now, snapshot, delay, held)` lists the names still due (in the plan at the same time, not suppressed by a mark), says whether to play the C, and when to wake. A group ends when nobody is left, on «Εντάξει» (`acknowledge(group_ids)`), or at the end of its alarms' business day (`reminder_cutoff`: the next date's business-day start). A reminder due while an alarm shows (`held`) waits for it. Off (`reminder_delay` = None) clears every group.
+- `reminder_cutoffs(now, rollover, days)`: the business days' ends sent to the Android plugin, so Kotlin applies the same cut-off without time arithmetic of its own.
+- `TodayRow::no_arrival_mark`: a left row without a check-in mark (SPEC §6).
 
 ## 8. Sync (Rust app core, while the app process is running)
 
 - **Polling:** every 5 s, call `get_version`. If `data_version` changed, call `get_snapshot`, store it, and recompute.
 - **Errors:** back off 5 → 10 → 30 → 60 s.
 - **Pending marks:** queued in SQLCipher with their `client_id` and flushed on every successful contact.
-- **Plan upkeep:** if `config_version > plan_config_version`, or `plan_horizon_end < now + 13 days`, compute the plan for [now, now + 14 days] and call `upload_plan`. On `version_conflict`, refetch and retry once.
+- **Plan upkeep:** if `config_version > plan_config_version`, or `plan_horizon_end < now + 13 days`, compute the plan for `clockin-core::upload_window` (from an hour before the previous business day's start, until now + 14 days) and call `upload_plan`. On `version_conflict`, refetch and retry once. The look-back keeps alarms that already rang in the server's plan, so `check_alarm` keeps answering "due" for an unmarked name of an alarm still ringing or of a reminder (1.0.0 uploaded from now − 15 min, and a phone's long-ringing alarm could lose its names on the next upload).
 - **Clock check:** compare `server_now` with the local clock and show the banner if they differ by more than 2 minutes. Alarm timing uses the device clock.
 - **After any admin call that succeeds,** refresh immediately rather than waiting for the next 5-second tick.
 
@@ -228,6 +233,7 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
   - closing the main window hides it;
   - **Quit** shows a 4-digit keypad and compares against the cached `quit_code`. It works offline.
   - autostart: the app writes `"<exe>" --autostart` to the current user's `Run` key (quoted path; `tauri-plugin-autostart` writes it unquoted) and starts hidden in the tray; single instance via `tauri-plugin-single-instance`.
+- **«Λείπει σήμανση» reminder** (1.1.0, SPEC §7.6): Stop starts a `ReminderScheduler` group, saved in the local database (survives a restart). The same loop evaluates it, held while an alarm shows. A reminder opens the `reminder` window (always on top, focused, wakes the display), lists the names with «Σήμανση» (the Today list's confirmation, then the usual queued mark) and «Εντάξει», and plays `reminder.wav` once on its own thread (`Player::chime`), never mixed into the alarm loop. Before a due reminder the loop refreshes the data, like before an alarm.
 - **Sound and window together:** each scheduler decision sets both the sound and the alarm window (`alarms::Output`); the sound never plays without the window, and Stop or nobody left ends both.
 - **Dead-key guard:** every app window is subclassed to drop `WM_DEADCHAR` / `WM_SYSDEADCHAR` before tao, which panics on one it did not see the key-down for (DECISIONS 2026-10-07).
 - **Crash log and restart watcher** (Phase 6, DECISIONS 2026-10-09):
@@ -245,7 +251,8 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 **Commands exposed to Rust** (Rust calls them off the main thread; see DECISIONS, Phase 5):
 
-- `setPlan(items, alertMode, configVersion, horizonEnd, theme, darkWindows)`: Rust sends its own 14-day plan without the alarms that marks known on the phone suppress, plus the alarm screen's theme and the automatic theme's dark periods (`clockin-core::auto_dark_windows`)
+- `setPlan(items, alertMode, configVersion, horizonEnd, theme, darkWindows, reminderMin, dayEnds)`: Rust sends its own plan for `upload_window` (14 days ahead, reaching back a business day so a long-ringing alarm or a reminder keeps its names) without the alarms that marks known on the phone suppress, plus the alarm screen's theme, the automatic theme's dark periods (`clockin-core::auto_dark_windows`), the reminder delay and the business days' ends (`clockin-core::reminder_cutoffs`, 1.1.0). Items carry `staff_id`, `source_block_id` and `business_date`, so the reminder screen can mark
+- `reminderStatus()` and `reminderOk(groupIds)` (1.1.0): the reminder showing, for the Today bar, and «Εντάξει» from it
 - `permissionStatus()`
 - `alarmStatus()` (the cycle in progress, for the «Σταμάτημα» bar on Today) and `stopAlarm()`
 - `diagnostics()` (the «Διαγνωστικά» view: phone, background refresh, next and last alarm, last Kotlin crash)
@@ -290,6 +297,14 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
    - if `canUseFullScreenIntent()` is false, still post the high-priority notification with the looping sound, and show the permission banner.
 5. **Notification mode:** a single high-priority notification on the notification channel. No service, no repeat.
 
+**«Λείπει σήμανση» reminder** (1.1.0, SPEC §7.6; `Reminders.kt`, `ReminderActivity.kt`):
+
+- **Groups:** Stop (`Ring.stop`) in Ring mode, or posting the notification in Notification mode, starts a group of the event's items, persisted with the plan. Reminder k is due at start + k·N (`ReminderMath`). A group ends on «Εντάξει», when nobody in it is left, or at its business day's end from `dayEnds` (an unknown day end means no reminder, so reminders start only once a 1.1.0 app has sent them).
+- **Scheduling:** `AlarmManager.setAlarmClock()` with its own action (`REMINDER_FIRE`) and request code 2 (the re-ring is 1; alarms use epoch-minute codes), so the alarms themselves are scheduled exactly as before. Verified 2026-10-17 (developer.android.com, "Optimize for Doze and App Standby"): `setAlarmClock()` alarms fire normally in Doze and the system leaves Doze shortly before them; `setExactAndAllowWhileIdle()` fires at most once per 9 minutes per app, too coarse with 5-minute reminders next to the alarms. Nothing is scheduled while an alarm cycle is in progress; its end reschedules (`AlarmScheduler.reschedule`).
+- **On fire:** `ReminderService`, a short foreground service (same types as the ring), calls `check_alarm` (3 s, fail loud: a failed check keeps every name), drops names no longer due, then posts or updates the reminder and plays `reminder.wav` once, unless Do Not Disturb is on (both modes). Ring mode: a full-screen intent to `ReminderActivity` on the alarm channel, audio `USAGE_ALARM`. Notification mode: a silent notification on the `reminders` channel with «Εντάξει» (the service plays the C with `USAGE_NOTIFICATION_EVENT`). The service stops within 8 s.
+- **ReminderActivity:** native views in the app's theme (`AppTheme`), over the lock screen. «Σήμανση» shows the Today list's question, asks for an unlock (`requestDismissKeyguard`) and calls `mark` directly (5 s); offline it says so and marks nothing. While open it re-checks the server every 25 s. It doesn't show the «χωρίς σήμανση άφιξης» note (Kotlin doesn't keep the marks).
+- **Plan changes:** a new plan from Rust drops reminder names that are no longer in it; a server plan (worker) doesn't, since the reminder's server check covers it.
+
 **Background refresh:** a WorkManager periodic job every 15 minutes with a network constraint. It calls `get_version`; if `plan_config_version` or `plan_horizon_end` changed, it calls `get_plan` and reschedules. If the horizon is under 3 days, it posts a quiet "open Clock In" notification.
 
 **Notification channels:**
@@ -316,10 +331,11 @@ Inputs are plain structs (no I/O) and `now: jiff::Timestamp`. The timezone is fi
 
 ## 11. Sounds
 
-`tools/gen-sounds` synthesises two WAVs (44.1 kHz, about 2 s, seamless loop):
+`tools/gen-sounds` synthesises three WAVs (44.1 kHz):
 
-- **check-in:** a rising three-note major arpeggio with soft bell timbre;
-- **check-out:** a falling two-note figure.
+- **check-in:** a rising three-note major arpeggio with soft bell timbre (about 2 s, seamless loop);
+- **check-out:** a falling two-note figure (about 2 s, seamless loop);
+- **reminder** (1.1.0): the check-in's first note (C5, same voice) alone, 1 s with a natural decay, played once, at the check-in's peak level.
 
 The WAVs are committed to `assets/sounds`. Android copies them to `res/raw`.
 
