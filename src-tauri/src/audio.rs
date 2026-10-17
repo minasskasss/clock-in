@@ -1,5 +1,6 @@
 //! The alarm sounds (SPEC §7.1, ARCHITECTURE §9): the two generated WAVs,
-//! looped with `rodio` on Windows. Other desktops (Linux CI, development)
+//! looped with `rodio` on Windows, and the «Λείπει σήμανση» reminder's C
+//! (SPEC §7.6), played once. Other desktops (Linux CI, development)
 //! play nothing; Android rings from its Kotlin plugin (Phase 5).
 //!
 //! The player runs on its own thread and opens the default output device
@@ -13,6 +14,8 @@ use clockin_core::Sound;
 const CHECK_IN_WAV: &[u8] = include_bytes!("../../assets/sounds/check-in.wav");
 #[cfg(any(windows, test))]
 const CHECK_OUT_WAV: &[u8] = include_bytes!("../../assets/sounds/check-out.wav");
+#[cfg(any(windows, test))]
+const REMINDER_WAV: &[u8] = include_bytes!("../../assets/sounds/reminder.wav");
 
 /// Decoded PCM audio.
 #[cfg(any(windows, test))]
@@ -82,12 +85,19 @@ pub fn pcm(sound: Sound) -> Option<Pcm> {
     })
 }
 
+/// The decoded reminder sound.
+#[cfg(any(windows, test))]
+#[must_use]
+pub fn reminder_pcm() -> Option<Pcm> {
+    parse_wav(REMINDER_WAV)
+}
+
 #[cfg(windows)]
 pub use windows::Player;
 
 #[cfg(windows)]
 mod windows {
-    use super::pcm;
+    use super::{Pcm, pcm, reminder_pcm};
     use clockin_core::Sound;
     use rodio::Source;
     use std::num::NonZero;
@@ -114,6 +124,43 @@ mod windows {
         pub fn set(&self, sound: Option<Sound>) {
             let _ = self.tx.send(sound);
         }
+
+        /// Plays the reminder's C once, on its own output stream, so it
+        /// never touches the alarm sound.
+        pub fn chime(&self) {
+            std::thread::Builder::new()
+                .name("clock-in-chime".into())
+                .spawn(|| {
+                    if let Err(e) = chime_once() {
+                        eprintln!("clock-in: cannot play the reminder sound: {e}");
+                    }
+                })
+                .ok();
+        }
+    }
+
+    fn chime_once() -> Result<(), String> {
+        let pcm = reminder_pcm().ok_or("bad sound file")?;
+        let (sink, player) = connect(pcm, false)?;
+        player.sleep_until_end();
+        drop(sink);
+        Ok(())
+    }
+
+    /// Opens the default output device and queues `pcm` on it.
+    fn connect(pcm: Pcm, repeat: bool) -> Result<(rodio::MixerDeviceSink, rodio::Player), String> {
+        let mut sink = rodio::DeviceSinkBuilder::open_default_sink().map_err(|e| e.to_string())?;
+        sink.log_on_drop(false);
+        let player = rodio::Player::connect_new(sink.mixer());
+        let channels = NonZero::new(pcm.channels).ok_or("no channels")?;
+        let rate = NonZero::new(pcm.sample_rate).ok_or("no sample rate")?;
+        let buffer = rodio::buffer::SamplesBuffer::new(channels, rate, pcm.samples);
+        if repeat {
+            player.append(buffer.repeat_infinite());
+        } else {
+            player.append(buffer);
+        }
+        Ok((sink, player))
     }
 
     struct Playing {
@@ -142,14 +189,7 @@ mod windows {
 
     fn open(sound: Sound) -> Result<Playing, String> {
         let pcm = pcm(sound).ok_or("bad sound file")?;
-        let mut sink = rodio::DeviceSinkBuilder::open_default_sink().map_err(|e| e.to_string())?;
-        sink.log_on_drop(false);
-        let player = rodio::Player::connect_new(sink.mixer());
-        let channels = NonZero::new(pcm.channels).ok_or("no channels")?;
-        let rate = NonZero::new(pcm.sample_rate).ok_or("no sample rate")?;
-        player.append(
-            rodio::buffer::SamplesBuffer::new(channels, rate, pcm.samples).repeat_infinite(),
-        );
+        let (sink, player) = connect(pcm, true)?;
         Ok(Playing {
             sound,
             _sink: sink,
@@ -170,6 +210,8 @@ impl Player {
     }
 
     pub fn set(&self, _sound: Option<Sound>) {}
+
+    pub fn chime(&self) {}
 }
 
 #[cfg(test)]
@@ -188,6 +230,14 @@ mod tests {
             assert!(pcm.samples.iter().all(|s| (-1.0..=1.0).contains(s)));
             assert!(pcm.samples.iter().any(|s| s.abs() > 0.5), "not silent");
         }
+    }
+
+    #[test]
+    fn the_reminder_sound_decodes_and_lasts_a_second() {
+        let pcm = reminder_pcm().unwrap();
+        assert_eq!((pcm.channels, pcm.sample_rate), (1, 44_100));
+        assert_eq!(pcm.samples.len(), 44_100);
+        assert!(pcm.samples.iter().any(|s| s.abs() > 0.5), "not silent");
     }
 
     #[test]

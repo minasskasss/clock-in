@@ -49,6 +49,8 @@ pub struct RowView {
     pub end_next_day: bool,
     pub status: RowStatus,
     pub next_mark: Option<MarkKind>,
+    /// «Έφυγε» without an arrival mark: the row shows a small note.
+    pub no_arrival_mark: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -86,6 +88,7 @@ pub fn today(snapshot: &Snapshot, now: Timestamp) -> TodayView {
                     end_next_day: o.end_next_day,
                     status: r.status,
                     next_mark: r.next_mark,
+                    no_arrival_mark: r.no_arrival_mark,
                 }
             })
             .collect(),
@@ -218,6 +221,8 @@ pub struct SettingsView {
     pub checkout_offset_min: i32,
     pub rollover: String,
     pub autostart: bool,
+    /// The «Λείπει σήμανση» delay in minutes; 0 = off.
+    pub unmarked_reminder_min: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -400,6 +405,7 @@ pub fn admin(snapshot: &ServerSnapshot, now: Timestamp) -> AdminView {
             checkout_offset_min: snapshot.settings.checkout_offset_min,
             rollover: hhmm(rollover),
             autostart: snapshot.settings.autostart,
+            unmarked_reminder_min: snapshot.settings.unmarked_reminder_min,
         },
         marks,
         devices,
@@ -498,6 +504,7 @@ mod tests {
                 rollover: t(5, 0),
                 autostart: true,
                 quit_code: None,
+                unmarked_reminder_min: 10,
             },
             marks: vec![
                 ServerMark {
