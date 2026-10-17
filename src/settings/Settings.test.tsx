@@ -66,7 +66,7 @@ describe("Settings", () => {
   it("changes the quit code under Κωδικοί, keeping the other settings, and no longer under Ειδοποιήσεις", async () => {
     const calls = mockCommands({
       app_state: appState({ adminUnlocked: true }),
-      admin_view: adminView({ settings: { checkinOffsetMin: -10, checkoutOffsetMin: 5, rollover: "04:00", autostart: false } }),
+      admin_view: adminView({ settings: { checkinOffsetMin: -10, checkoutOffsetMin: 5, rollover: "04:00", autostart: false, unmarkedReminderMin: 25 } }),
       settings_save: null,
     });
     const user = userEvent.setup();
@@ -97,9 +97,9 @@ describe("Settings", () => {
       app_state: appState({
         adminUnlocked: true,
         platform: "android",
-        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null },
+        android: { alertMode: "ring", permissions: null, permissionsOk: true, alarm: null, reminder: null },
       }),
-      admin_view: adminView({ settings: { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true } }),
+      admin_view: adminView({ settings: { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true, unmarkedReminderMin: 10 } }),
       settings_save: null,
     });
     const user = userEvent.setup();
@@ -110,9 +110,39 @@ describe("Settings", () => {
     await user.click(screen.getByRole("button", { name: "Αποθήκευση" }));
     expect(await screen.findByText("Αποθηκεύτηκε.")).toBeInTheDocument();
     expect(callsTo(calls, "settings_save")).toEqual([
-      { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true, quitCode: null },
+      { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true, quitCode: null, unmarkedReminderMin: 10 },
     ]);
     window.localStorage.removeItem("clockin.onboarding");
+  });
+
+  it("saves the «Λείπει σήμανση» delay, «Όχι» included", async () => {
+    const calls = mockCommands({
+      app_state: appState({ adminUnlocked: true }),
+      admin_view: adminView(),
+      settings_save: null,
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Ρυθμίσεις" }));
+    await user.click(await screen.findByRole("tab", { name: "Ειδοποιήσεις" }));
+    const select = screen.getByLabelText("Υπενθύμιση αν λείπει σήμανση");
+    expect(select).toHaveValue("10");
+    expect(Array.from((select as HTMLSelectElement).options).map((o) => o.text)).toEqual([
+      "Όχι",
+      "5 λεπτά μετά το «Σταμάτημα»",
+      "10 λεπτά μετά το «Σταμάτημα»",
+      "15 λεπτά μετά το «Σταμάτημα»",
+      "20 λεπτά μετά το «Σταμάτημα»",
+      "30 λεπτά μετά το «Σταμάτημα»",
+      "45 λεπτά μετά το «Σταμάτημα»",
+      "60 λεπτά μετά το «Σταμάτημα»",
+    ]);
+    await user.selectOptions(select, "Όχι");
+    await user.click(screen.getByRole("button", { name: "Αποθήκευση" }));
+    expect(await screen.findByText("Αποθηκεύτηκε.")).toBeInTheDocument();
+    expect(callsTo(calls, "settings_save")).toEqual([
+      { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true, quitCode: null, unmarkedReminderMin: 0 },
+    ]);
   });
 
   it("shows «Άνοιγμα με την εκκίνηση των Windows» on Windows", async () => {

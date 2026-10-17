@@ -140,6 +140,8 @@ export default function App() {
         onFixPermissions={() => setOnboarding(true)}
         alarm={android?.alarm ?? null}
         onStopAlarm={() => void api.androidStopAlarm().then(refresh, () => {})}
+        reminder={android?.reminder ?? null}
+        onReminderOk={(ids) => void api.androidReminderOk(ids).then(refresh, () => {})}
         onChanged={() => void refresh()}
       />
     );

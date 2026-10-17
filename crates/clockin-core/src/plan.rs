@@ -1,11 +1,11 @@
 //! The materialised alarm plan (ARCHITECTURE §2 and §4): every check-in and
 //! check-out alarm in a time window, with deterministic ids.
 
-use crate::business_day::business_date_for;
+use crate::business_day::{business_date_for, business_day_start};
 use crate::model::{MarkKind, Snapshot};
 use crate::occurrence::{name_sort_key, occurrences};
 use crate::shop_time::{add_days, floor_to_minute};
-use jiff::civil::Date;
+use jiff::civil::{Date, Time};
 use jiff::{SignedDuration, Timestamp};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -69,6 +69,28 @@ pub fn plan_window(now: Timestamp) -> (Timestamp, Timestamp) {
         now.saturating_sub(MISSED_ALARM_GRACE).unwrap_or(now),
         now.saturating_add(PLAN_HORIZON).unwrap_or(now),
     )
+}
+
+/// How far before its business day an alarm can fire: the most negative
+/// check-in offset.
+const EARLIEST_OFFSET: SignedDuration = SignedDuration::from_mins(60);
+
+/// The window of the plan a device uploads to the server: like
+/// [`plan_window`], but reaching back to an hour before the start of the
+/// **previous** business day, so alarms that already rang stay in the server's
+/// plan. The pre-alarm check (`check_alarm`) answers "not due" for an item
+/// that is no longer in the plan, and an upload replaces the whole plan, so
+/// with a 15-minute look-back a phone would drop names from an alarm still
+/// ringing, or from a «Λείπει σήμανση» reminder (SPEC §7.6), after any upload.
+/// Past items are recomputed from the current data like the rest, so a
+/// removed or moved block still leaves the plan.
+#[must_use]
+pub fn upload_window(now: Timestamp, rollover: Time) -> (Timestamp, Timestamp) {
+    let (from, until) = plan_window(now);
+    let previous = add_days(business_date_for(now, rollover), -1)
+        .and_then(|d| business_day_start(d, rollover))
+        .and_then(|start| start.checked_sub(EARLIEST_OFFSET).ok());
+    (previous.map_or(from, |p| p.min(from)), until)
 }
 
 /// Every alarm with `from <= fires_at < until`, sorted by time, then check-in
@@ -286,6 +308,58 @@ mod tests {
             2
         );
         assert!(alarm_plan(&snap, five_pm, nine).is_empty());
+    }
+
+    #[test]
+    fn upload_window_keeps_the_previous_business_day() {
+        // Monday 12:00: from Sunday 04:00 (an hour before Sunday's 05:00).
+        let now = athens(MONDAY, 12, 0);
+        let (from, until) = upload_window(now, FIVE);
+        assert_eq!(from, athens(date(2026, 5, 31), 4, 0));
+        assert_eq!(until, plan_window(now).1);
+        // Tuesday 01:30 is still Monday's business day: from Sunday 04:00.
+        assert_eq!(
+            upload_window(athens(TUESDAY, 1, 30), FIVE).0,
+            athens(date(2026, 5, 31), 4, 0)
+        );
+        // Tuesday 05:00 starts Tuesday's: from Monday 04:00.
+        assert_eq!(
+            upload_window(athens(TUESDAY, 5, 0), FIVE).0,
+            athens(MONDAY, 4, 0)
+        );
+        // Across fall-back: Monday 26 Oct 2026 12:00 → Sunday 25 Oct 04:00,
+        // which is after the repeated hour (EET, UTC+2).
+        let monday = date(2026, 10, 26);
+        assert_eq!(
+            upload_window(athens(monday, 12, 0), FIVE).0,
+            "2026-10-25T02:00:00Z".parse().unwrap()
+        );
+    }
+
+    #[test]
+    fn an_uploaded_plan_keeps_alarms_that_rang_and_drops_removed_ones() {
+        let a = staff(1, "Anna", "Alpha");
+        let mut snap = Snapshot {
+            blocks: vec![weekly(10, &a, Weekday::Monday, (9, 0), (17, 0))],
+            staff: vec![a],
+            ..Snapshot::default()
+        };
+        let now = athens(MONDAY, 18, 0);
+        let (from, until) = upload_window(now, FIVE);
+        let plan = alarm_plan(&snap, from, until);
+        // Anna's 09:00 check-in rang 9 hours ago and is still there.
+        assert!(
+            plan.iter()
+                .any(|i| i.fires_at == athens(MONDAY, 9, 0) && i.kind == MarkKind::In)
+        );
+        // A day off for Monday takes Monday's past alarms out too.
+        snap.overrides.push(day_off(90, &snap.staff[0], MONDAY));
+        let plan = alarm_plan(&snap, from, until);
+        assert!(
+            !plan
+                .iter()
+                .any(|i| i.business_date == MONDAY && i.staff_id == snap.staff[0].id)
+        );
     }
 
     #[test]

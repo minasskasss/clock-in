@@ -196,13 +196,25 @@ impl AlarmScheduler {
     }
 
     /// Stop was pressed on this device (SPEC §7.3): the alarm `id` ends here
-    /// and its alarms don't ring again. Returns whether anything changed (a
-    /// Stop for an alarm that was replaced meanwhile does nothing).
-    pub fn stop(&mut self, id: u64) -> bool {
+    /// and its alarms don't ring again. Returns the alarms it ended, for the
+    /// «Λείπει σήμανση» reminder ([`crate::ReminderScheduler::start`]), or
+    /// `None` when nothing changed (a Stop for an alarm that was replaced
+    /// meanwhile does nothing).
+    pub fn stop(&mut self, id: u64) -> Option<Vec<AlarmKey>> {
         match &self.active {
-            Some(active) if active.id == id => self.end(),
-            _ => false,
+            Some(active) if active.id == id => {
+                let keys = active.keys.iter().cloned().collect();
+                self.end();
+                Some(keys)
+            }
+            _ => None,
         }
+    }
+
+    /// Whether an alarm is showing (ringing or silent between rings).
+    #[must_use]
+    pub fn is_active(&self) -> bool {
+        self.active.is_some()
     }
 
     fn end(&mut self) -> bool {
@@ -432,7 +444,7 @@ mod tests {
         assert!(ringing(&s.evaluate(mins(start, 120), &snap)));
 
         let id = again.alarm.unwrap().id;
-        assert!(s.stop(id));
+        assert!(s.stop(id).is_some());
         let after = s.evaluate(mins(start, 121), &snap);
         assert_eq!(after.alarm, None);
         assert!(!after.handled_changed);
@@ -575,16 +587,60 @@ mod tests {
         );
         assert_eq!(joined.event.check_in.len(), 3);
         // A Stop meant for the old version is ignored.
-        assert!(!s.stop(first.id));
+        assert!(s.stop(first.id).is_none());
         assert!(s.evaluate(at(9, 1), &snap).alarm.is_some());
-        assert!(s.stop(joined.id));
+        assert!(s.stop(joined.id).is_some());
         assert_eq!(s.evaluate(at(9, 2), &snap).alarm, None);
+    }
+
+    #[test]
+    fn a_long_ring_keeps_its_names_across_refreshes_and_the_rollover() {
+        // Nobody presses Stop for Anna's 09:00 alarm. Every evaluation gets a
+        // freshly fetched snapshot (here: another block added meanwhile);
+        // the plan still reaches back to her alarm, so it never ends by
+        // itself while she is unmarked, not even after the business day
+        // turns over at 05:00.
+        let a = staff(1, "Anna", "Alpha");
+        let b = staff(2, "Babis", "Beta");
+        let first = Snapshot {
+            blocks: vec![weekly(10, &a, Weekday::Monday, (9, 0), (17, 0))],
+            staff: vec![a.clone()],
+            ..Snapshot::default()
+        };
+        let refreshed = || {
+            let mut snap = first.clone();
+            snap.blocks
+                .push(weekly(20, &b, Weekday::Wednesday, (12, 0), (16, 0)));
+            snap.staff.push(b.clone());
+            snap
+        };
+        let mut s = AlarmScheduler::default();
+        let alarm = s.evaluate(at(9, 0), &first).alarm.unwrap();
+        for t in [at(9, 20), at(12, 0), at(16, 59)] {
+            let later = s.evaluate(t, &refreshed()).alarm.unwrap();
+            assert_eq!(later.id, alarm.id);
+            assert_eq!(names(&later), (vec!["Anna Alpha"], vec![]));
+        }
+        // Her check-out joins at 17:00; both stay past the 05:00 rollover.
+        let joined = s.evaluate(at(17, 0), &refreshed()).alarm.unwrap();
+        assert_eq!(names(&joined), (vec!["Anna Alpha"], vec!["Anna Alpha"]));
+        let next_day = s
+            .evaluate(athens(TUESDAY, 6, 0), &refreshed())
+            .alarm
+            .unwrap();
+        assert_eq!(next_day.id, joined.id);
+        assert_eq!(names(&next_day), (vec!["Anna Alpha"], vec!["Anna Alpha"]));
+        // Only a mark (or Stop) ends it.
+        let mut marked = refreshed();
+        marked.marks.push(mark(1, 1, 10, MONDAY, MarkKind::In));
+        marked.marks.push(mark(2, 1, 10, MONDAY, MarkKind::Out));
+        assert_eq!(s.evaluate(athens(TUESDAY, 6, 1), &marked).alarm, None);
     }
 
     #[test]
     fn stop_needs_an_alarm() {
         let mut s = AlarmScheduler::default();
-        assert!(!s.stop(1));
+        assert!(s.stop(1).is_none());
     }
 
     #[test]
@@ -592,7 +648,7 @@ mod tests {
         let snap = snapshot();
         let mut s = AlarmScheduler::default();
         let alarm = s.evaluate(at(8, 0), &snap).alarm.unwrap();
-        assert!(s.stop(alarm.id));
+        assert!(s.stop(alarm.id).is_some());
         let saved = s.handled();
         assert_eq!(saved.len(), 1);
 
@@ -731,7 +787,7 @@ mod tests {
             if let Some(alarm) = state.alarm
                 && now.duration_since(alarm.event.at) >= SignedDuration::from_mins(1)
             {
-                assert!(s.stop(alarm.id));
+                assert!(s.stop(alarm.id).is_some());
                 rang += 1;
             }
             now = state.wake_at;

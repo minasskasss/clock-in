@@ -159,7 +159,7 @@ async fn dev() -> Dev {
          delete from app.devices where true;
          update app.auth_state set passphrase_hash = null, failed_count = 0, locked_until = null where id;
          update app.settings set checkin_offset_min = 0, checkout_offset_min = 0, rollover = '05:00',
-                                 autostart = true, quit_code = null where id;
+                                 autostart = true, quit_code = null, unmarked_reminder_min = 10 where id;
          update app.meta set plan_config_version = config_version, plan_horizon_end = null where id;",
     )
     .await
@@ -426,7 +426,7 @@ async fn app_schema_is_unreachable_and_locked_down() {
             .await,
         0
     );
-    // Exactly the 20 RPCs in public; each SECURITY DEFINER with an empty
+    // Exactly the 21 RPCs in public; each SECURITY DEFINER with an empty
     // search_path, executable by anon only (not PUBLIC, not authenticated).
     assert_eq!(
         dev.i64(
@@ -434,7 +434,7 @@ async fn app_schema_is_unreachable_and_locked_down() {
               where n.nspname = 'public'"
         )
         .await,
-        20
+        21
     );
     assert_eq!(
         dev.i64(
@@ -447,7 +447,7 @@ async fn app_schema_is_unreachable_and_locked_down() {
                 and not exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0)"
         )
         .await,
-        20
+        21
     );
     // Helpers in app also run with an empty search_path.
     assert_eq!(
@@ -490,7 +490,8 @@ async fn app_schema_is_unreachable_and_locked_down() {
             .await,
         [
             "admin_logout,change_passphrase,device_revoke,mark_void,override_delete,",
-            "override_set,schedule_set,settings_update,staff_create,staff_remove,staff_update",
+            "override_set,schedule_set,settings_update,settings_update_v2,staff_create,",
+            "staff_remove,staff_update",
         ]
         .concat()
     );
@@ -957,6 +958,7 @@ async fn admin_sessions() {
         rollover: t(4, 0),
         autostart: false,
         quit_code: QuitCode::new("9876".into()),
+        unmarked_reminder_min: 15,
     };
     let id = Uuid::new_v4();
     let today = dev.business_today().await;
@@ -1357,6 +1359,7 @@ async fn admin_data_changes() {
         rollover: t(5, 0),
         autostart: true,
         quit_code: quit(),
+        unmarked_reminder_min: 10,
     };
     for bad in [
         SettingsInput {
@@ -1373,6 +1376,14 @@ async fn admin_data_changes() {
         },
         SettingsInput {
             quit_code: QuitCode::new("12345".into()),
+            ..ok.clone()
+        },
+        SettingsInput {
+            unmarked_reminder_min: -1,
+            ..ok.clone()
+        },
+        SettingsInput {
+            unmarked_reminder_min: 61,
             ..ok.clone()
         },
     ] {
@@ -1396,6 +1407,243 @@ async fn admin_data_changes() {
     assert_eq!(
         code(api.staff_remove(secret, &session, staff).await),
         ErrorCode::InvalidInput
+    );
+}
+
+/// 1.0.0 clients keep working against the 1.1.0 schema (migration
+/// `20261017120000_unmarked_reminder`): their exact `settings_update` request
+/// still works and never resets the reminder setting, and their snapshot and
+/// plan shapes still decode.
+#[tokio::test]
+#[ignore = "uses the dev Supabase project"]
+async fn compatible_with_1_0_0_clients() {
+    /// `ServerSettings` exactly as 1.0.0 declares it (crates/clockin-sync at
+    /// commit 83bf5ee): a 1.0.0 device decodes the new snapshot with this.
+    #[derive(serde::Deserialize, Debug)]
+    #[allow(dead_code)]
+    struct Settings100 {
+        checkin_offset_min: i32,
+        checkout_offset_min: i32,
+        rollover: Time,
+        autostart: bool,
+        quit_code: Option<String>,
+    }
+    /// The plan fields 1.0.0's Kotlin `PlanItem.fromJson` reads.
+    #[derive(serde::Deserialize, Debug)]
+    #[allow(dead_code)]
+    struct PlanItem100 {
+        item_id: String,
+        fires_at: Timestamp,
+        kind: String,
+        display_name: String,
+    }
+
+    let dev = dev().await;
+    let api = &dev.api;
+    let (pc, passphrase) = dev.init().await;
+    let secret = &pc.device_secret;
+    let session = dev.login(&pc, &passphrase).await;
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let http = reqwest::Client::builder()
+        .tls_backend_preconfigured(tls())
+        .build()
+        .unwrap();
+    let rpc = |name: &str, body: serde_json::Value| {
+        http.post(format!("{}/rest/v1/rpc/{name}", dev.config.base_url()))
+            .header("apikey", dev.config.publishable_key.as_str())
+            .json(&body)
+            .send()
+    };
+    let reminder = || dev.i64("select unmarked_reminder_min::bigint from app.settings");
+
+    // A fresh (or just migrated) server has the default.
+    assert_eq!(reminder().await, 10);
+    assert_eq!(
+        api.get_snapshot(secret)
+            .await
+            .unwrap()
+            .settings
+            .unmarked_reminder_min,
+        10
+    );
+
+    // 1.1.0 sets it to 25.
+    let v110 = SettingsInput {
+        checkin_offset_min: 0,
+        checkout_offset_min: 0,
+        rollover: t(5, 0),
+        autostart: true,
+        quit_code: quit(),
+        unmarked_reminder_min: 25,
+    };
+    api.settings_update(secret, &session, &v110).await.unwrap();
+    assert_eq!(reminder().await, 25);
+
+    // 1.0.0 saves «Ειδοποιήσεις» with its exact request: it succeeds, its own
+    // values change, and the reminder stays 25.
+    let response = rpc(
+        "settings_update",
+        serde_json::json!({
+            "p_secret": secret.expose(),
+            "p_session": session.expose(),
+            "p_checkin_offset_min": -10,
+            "p_checkout_offset_min": 5,
+            "p_rollover": "04:00:00",
+            "p_autostart": false,
+            "p_quit_code": "1357",
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(response.status(), 200);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body, serde_json::json!({ "ok": true }));
+    assert_eq!(reminder().await, 25, "a 1.0.0 save never resets it");
+    assert_eq!(
+        dev.text(
+            "select concat_ws(',', checkin_offset_min, checkout_offset_min, rollover,
+                              autostart, quit_code) from app.settings"
+        )
+        .await,
+        "-10,5,04:00:00,f,1357"
+    );
+
+    // 1.0.0's snapshot decoding: the settings object gained one key only.
+    let response = rpc(
+        "get_snapshot",
+        serde_json::json!({ "p_secret": secret.expose() }),
+    )
+    .await
+    .unwrap();
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["ok"], true);
+    let mut keys: Vec<&str> = body["settings"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "autostart",
+            "checkin_offset_min",
+            "checkout_offset_min",
+            "quit_code",
+            "rollover",
+            "unmarked_reminder_min"
+        ]
+    );
+    let old: Settings100 = serde_json::from_value(body["settings"].clone()).unwrap();
+    assert_eq!(old.checkin_offset_min, -10);
+    assert_eq!(old.quit_code.as_deref(), Some("1357"));
+    assert_eq!(
+        api.get_snapshot(secret)
+            .await
+            .unwrap()
+            .settings
+            .unmarked_reminder_min,
+        25
+    );
+
+    // 1.0.0's plan: a plan uploaded by 1.1.0 (reaching back a business day)
+    // comes back whole from `get_plan` and decodes item by item. A 1.0.0
+    // phone schedules exactly what it did (it never fires an item more than
+    // 15 minutes late), and a long-ringing alarm there keeps its names.
+    let every_day = [
+        Weekday::Monday,
+        Weekday::Tuesday,
+        Weekday::Wednesday,
+        Weekday::Thursday,
+        Weekday::Friday,
+        Weekday::Saturday,
+        Weekday::Sunday,
+    ]
+    .map(|d| (d, t(9, 0), t(17, 0)));
+    api.staff_create(secret, &session, "Δοκιμή", "Συμβατότητα", &week(&every_day))
+        .await
+        .unwrap();
+    let snap = api.get_snapshot(secret).await.unwrap();
+    let core = snap.core_snapshot(&[]);
+    let now = Timestamp::now();
+    let (from, until) = clockin_core::upload_window(now, snap.settings.rollover);
+    let items = alarm_plan(&core, from, until);
+    let past = items
+        .iter()
+        .find(|i| i.fires_at < now - SignedDuration::from_mins(15))
+        .expect("an alarm of the previous business day");
+    api.upload_plan(secret, snap.config_version, until, &items)
+        .await
+        .unwrap();
+    let response = rpc(
+        "get_plan",
+        serde_json::json!({ "p_secret": secret.expose() }),
+    )
+    .await
+    .unwrap();
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["ok"], true);
+    assert_eq!(body["unmarked_reminder_min"], 25);
+    let old: Vec<PlanItem100> = serde_json::from_value(body["items"].clone()).unwrap();
+    assert_eq!(old.len(), items.len());
+    assert!(
+        old.iter()
+            .any(|i| i.item_id == past.item_id && i.fires_at == past.fires_at)
+    );
+    assert_eq!(
+        api.get_plan(secret).await.unwrap().unmarked_reminder_min,
+        Some(25)
+    );
+
+    // `check_alarm` still answers "due" for an alarm that rang hours ago.
+    let check = api
+        .check_alarm(secret, &[(past.item_id.as_str(), past.fires_at)])
+        .await
+        .unwrap();
+    assert!(check.items[0].due);
+
+    // The new RPC checks its range; 0 is Off.
+    for bad in [-1, 61] {
+        let input = SettingsInput {
+            unmarked_reminder_min: bad,
+            ..v110.clone()
+        };
+        assert_eq!(
+            code(api.settings_update(secret, &session, &input).await),
+            ErrorCode::InvalidInput
+        );
+    }
+    let response = rpc(
+        "settings_update_v2",
+        serde_json::json!({
+            "p_secret": secret.expose(),
+            "p_session": session.expose(),
+            "p_checkin_offset_min": 0,
+            "p_checkout_offset_min": 0,
+            "p_rollover": "05:00:00",
+            "p_autostart": true,
+            "p_quit_code": "1357",
+            "p_unmarked_reminder_min": null,
+        }),
+    )
+    .await
+    .unwrap();
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(body["error"], "invalid_input");
+    let off = SettingsInput {
+        unmarked_reminder_min: 0,
+        ..v110.clone()
+    };
+    api.settings_update(secret, &session, &off).await.unwrap();
+    assert_eq!(reminder().await, 0);
+    // Like every admin RPC, it needs a session.
+    assert_eq!(
+        code(
+            api.settings_update(secret, &SessionToken::new("x".into()), &v110)
+                .await
+        ),
+        ErrorCode::NoSession
     );
 }
 

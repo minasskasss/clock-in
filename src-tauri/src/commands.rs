@@ -2,7 +2,7 @@
 //! `clockin-core`, the server calls in `clockin-sync`, state in [`AppState`].
 
 #[cfg(desktop)]
-use crate::alarms::{AlarmView, Alarms};
+use crate::alarms::{AlarmView, Alarms, ReminderView};
 use crate::drafts::{
     self, OverrideReport, RangeDraft, WeekBlockDraft, WeekReport, check_override, check_week,
     parse_date, parse_hhmm,
@@ -60,6 +60,16 @@ pub struct AndroidView {
     permissions_ok: bool,
     /// A ring-mode alarm in progress on this phone: Today shows «Σταμάτημα».
     alarm: Option<AlarmBanner>,
+    /// A «Λείπει σήμανση» reminder showing on this phone: Today shows «Εντάξει».
+    reminder: Option<ReminderBanner>,
+}
+
+/// The «Λείπει σήμανση» reminder showing on the phone, for the bar on Today.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderBanner {
+    group_ids: Vec<i64>,
+    names: Vec<String>,
 }
 
 /// The ringing (or silent-between-rings) alarm, for the bar on Today.
@@ -124,12 +134,21 @@ fn android_view(app: &tauri::AppHandle, state: &AppState) -> Option<AndroidView>
     let android = app.try_state::<Arc<crate::android::Android>>();
     let permissions = android.as_ref().and_then(|a| a.status());
     let alarm = android
+        .as_ref()
         .map(|a| a.alarm())
         .filter(|a| a.active)
         .map(|a| AlarmBanner {
             ringing: a.ringing,
             check_in: a.check_in,
             check_out: a.check_out,
+        });
+    let reminder = android
+        .as_ref()
+        .map(|a| a.reminder())
+        .filter(|r| !r.group_ids.is_empty())
+        .map(|r| ReminderBanner {
+            group_ids: r.group_ids,
+            names: r.names,
         });
     Some(AndroidView {
         alert_mode: state.alert_mode(),
@@ -138,6 +157,7 @@ fn android_view(app: &tauri::AppHandle, state: &AppState) -> Option<AndroidView>
             .is_none_or(tauri_plugin_clockin_alarm::PermissionStatus::all_granted),
         permissions,
         alarm,
+        reminder,
     })
 }
 
@@ -211,6 +231,33 @@ pub async fn android_stop_alarm(app: tauri::AppHandle) -> Result<(), CmdError> {
             && let Some(android) = app.try_state::<Arc<crate::android::Android>>()
         {
             android.set_alarm(alarm);
+        }
+    }
+    Ok(())
+}
+
+/// «Εντάξει» on the Today bar: ends the «Λείπει σήμανση» reminders shown on
+/// this phone. It marks nobody (SPEC §7.6).
+#[tauri::command]
+#[cfg_attr(
+    not(target_os = "android"),
+    allow(unused_variables, clippy::unused_async, clippy::needless_pass_by_value)
+)]
+pub async fn android_reminder_ok(
+    app: tauri::AppHandle,
+    group_ids: Vec<i64>,
+) -> Result<(), CmdError> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let ids = group_ids.clone();
+        if let Some(Err(e)) = crate::android::bridge(&app, move |b| b.reminder_ok(&ids)).await {
+            return Err(CmdError::internal(e));
+        }
+        if let Some(Ok(reminder)) = crate::android::bridge(&app, |b| b.reminder_status()).await
+            && let Some(android) = app.try_state::<Arc<crate::android::Android>>()
+        {
+            android.set_reminder(reminder);
         }
     }
     Ok(())
@@ -602,8 +649,10 @@ pub async fn override_delete(state: AppS<'_>, id: Uuid) -> Result<(), CmdError> 
         .await
 }
 
-/// Saves offsets, rollover, autostart and (if given) a new quit code.
+/// Saves offsets, rollover, autostart, the reminder delay (the current one
+/// when not given) and (if given) a new quit code.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn settings_save(
     state: AppS<'_>,
     checkin_offset_min: i32,
@@ -611,6 +660,7 @@ pub async fn settings_save(
     rollover: String,
     autostart: bool,
     quit_code: Option<String>,
+    unmarked_reminder_min: Option<i32>,
 ) -> Result<(), CmdError> {
     let rollover = parse_hhmm(&rollover).ok_or(CmdError::invalid("rollover", "format"))?;
     let schedule = ScheduleSettings {
@@ -626,6 +676,10 @@ pub async fn settings_save(
         };
         return Err(CmdError::invalid(field, "range"));
     }
+    let unmarked_reminder_min = unmarked_reminder_min.unwrap_or_else(|| state.reminder_min());
+    if !(0..=clockin_core::MAX_REMINDER_MIN).contains(&unmarked_reminder_min) {
+        return Err(CmdError::invalid("unmarked_reminder_min", "range"));
+    }
     let quit_code = new_quit_code(quit_code, state.current_quit_code(), state.admin_unlocked())?;
     let input = SettingsInput {
         checkin_offset_min,
@@ -633,6 +687,7 @@ pub async fn settings_save(
         rollover,
         autostart,
         quit_code,
+        unmarked_reminder_min,
     };
     state
         .admin_call(|api, secret, session| async move {
@@ -723,11 +778,38 @@ pub fn alarm_state(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>) -> AlarmStat
 }
 
 /// Stop on the alarm window: ends alarm `id` on this device only. It marks
-/// nobody (SPEC §7.3).
+/// nobody (SPEC §7.3) and starts the «Λείπει σήμανση» reminder (SPEC §7.6).
 #[cfg(desktop)]
 #[tauri::command]
 pub fn alarm_stop(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>, id: u64) {
     alarms.stop(&state, id);
+}
+
+/// What the reminder window polls.
+#[cfg(desktop)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderStateView {
+    /// `None` once nobody is left (the window is about to close).
+    reminder: Option<ReminderView>,
+    auto_dark: bool,
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+pub fn reminder_state(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>) -> ReminderStateView {
+    ReminderStateView {
+        reminder: alarms.reminder_view(),
+        auto_dark: clockin_core::auto_theme_is_dark(state.clock.now(), state.rollover()),
+    }
+}
+
+/// «Εντάξει» on the reminder window: no more reminders for these alarms on
+/// this device. It marks nobody («Σήμανση» uses `mark`, like Today).
+#[cfg(desktop)]
+#[tauri::command]
+pub fn reminder_ok(state: AppS<'_>, alarms: State<'_, Arc<Alarms>>, group_ids: Vec<u64>) {
+    alarms.reminder_ok(&state, &group_ids);
 }
 
 /// Tray → Quit (SPEC §8.1): exits only with the right quit code, checked on

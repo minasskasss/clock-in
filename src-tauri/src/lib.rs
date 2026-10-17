@@ -234,12 +234,17 @@ pub fn run() {
             #[cfg(desktop)]
             commands::alarm_stop,
             #[cfg(desktop)]
+            commands::reminder_state,
+            #[cfg(desktop)]
+            commands::reminder_ok,
+            #[cfg(desktop)]
             commands::quit,
             commands::set_alert_mode,
             commands::android_open_settings,
             commands::android_set_oem_done,
             commands::set_theme,
             commands::android_stop_alarm,
+            commands::android_reminder_ok,
             commands::android_diagnostics,
             commands::android_insets,
             commands::debug_set_clock,

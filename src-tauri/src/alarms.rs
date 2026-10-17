@@ -1,9 +1,10 @@
 //! Windows alarms (ARCHITECTURE §9, SPEC §7): the scheduler loop, the alarm
-//! window and the sound.
+//! window and the sound, and the «Λείπει σήμανση» reminder window after Stop
+//! (SPEC §7.6).
 //!
-//! Every decision comes from [`AlarmScheduler`] in `clockin-core`; this loop
-//! only feeds it the time and the latest local data, and makes the window
-//! and the sound match what it returns. It re-evaluates at least every 30 s
+//! Every decision comes from [`AlarmScheduler`] and [`ReminderScheduler`] in
+//! `clockin-core`; this loop only feeds them the time and the latest local
+//! data, and makes the windows and the sounds match what they return. It re-evaluates at least every 30 s
 //! (robust to sleep/resume and clock changes), at each alarm minute, and at
 //! once when data changes, a mark is made or Stop is pressed.
 
@@ -11,7 +12,10 @@ use crate::audio::Player;
 use crate::i18n::text;
 use crate::state::AppState;
 use crate::views::LocalStamp;
-use clockin_core::{AlarmScheduler, RingPhase, RingingAlarm, Snapshot, Sound};
+use clockin_core::{
+    AlarmScheduler, MarkKind, ReminderName, ReminderScheduler, ReminderState, RingPhase,
+    RingingAlarm, Snapshot, Sound, UnmarkedReminder, reminder_delay,
+};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
@@ -22,6 +26,8 @@ use tauri::{
 
 /// The alarm window's label.
 pub const WINDOW: &str = "alarm";
+/// The «Λείπει σήμανση» reminder window's label.
+pub const REMINDER_WINDOW: &str = "reminder";
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
@@ -83,6 +89,59 @@ impl AlarmView {
     }
 }
 
+/// What the reminder window shows (SPEC §7.6). Times are Greek "HH:MM".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderView {
+    /// Pass back to `reminder_ok` («Εντάξει»).
+    pub group_ids: Vec<u64>,
+    pub check_in: Vec<ReminderLine>,
+    pub check_out: Vec<ReminderLine>,
+    /// When it reminds again; `None` for the last one of the business day.
+    pub next_at: Option<String>,
+}
+
+/// One name on the reminder, with what «Σήμανση» marks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderLine {
+    pub name: String,
+    /// The alarm time.
+    pub at: String,
+    pub staff_id: uuid::Uuid,
+    pub source_block_id: uuid::Uuid,
+    /// ISO business date.
+    pub business_date: String,
+    pub kind: MarkKind,
+    /// A departure whose arrival was never marked either.
+    pub no_arrival_mark: bool,
+}
+
+impl ReminderView {
+    fn new(reminder: &UnmarkedReminder) -> Self {
+        let lines = |names: &[ReminderName]| -> Vec<ReminderLine> {
+            names
+                .iter()
+                .map(|n| ReminderLine {
+                    name: n.item.display_name.clone(),
+                    at: LocalStamp::at(n.item.fires_at).time,
+                    staff_id: n.item.staff_id,
+                    source_block_id: n.item.source_block_id,
+                    business_date: n.item.business_date.to_string(),
+                    kind: n.item.kind,
+                    no_arrival_mark: n.no_arrival_mark,
+                })
+                .collect()
+        };
+        Self {
+            group_ids: reminder.group_ids.clone(),
+            check_in: lines(&reminder.check_in),
+            check_out: lines(&reminder.check_out),
+            next_at: reminder.next_at.map(|t| LocalStamp::at(t).time),
+        }
+    }
+}
+
 /// The sound and the window for one scheduler decision. Both always come
 /// from the same decision, so the sound never plays without the window and
 /// Stop (or nobody left) ends both together.
@@ -104,6 +163,8 @@ impl Output {
 pub struct Alarms {
     scheduler: Mutex<AlarmScheduler>,
     view: RwLock<Option<AlarmView>>,
+    reminders: Mutex<ReminderScheduler>,
+    reminder_view: RwLock<Option<ReminderView>>,
     player: Player,
     /// The webview data folder of a debug profile (all windows share it).
     webview_dir: Option<PathBuf>,
@@ -116,6 +177,8 @@ impl Alarms {
         Self {
             scheduler: Mutex::new(AlarmScheduler::with_handled(state.handled_alarms())),
             view: RwLock::new(None),
+            reminders: Mutex::new(ReminderScheduler::with_groups(state.reminder_groups())),
+            reminder_view: RwLock::new(None),
             player: Player::start(),
             webview_dir,
         }
@@ -130,14 +193,76 @@ impl Alarms {
             .clone()
     }
 
-    /// Stop pressed on this device (SPEC §7.3). It marks nobody.
+    /// What the reminder window should show now.
+    #[must_use]
+    pub fn reminder_view(&self) -> Option<ReminderView> {
+        self.reminder_view
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Stop pressed on this device (SPEC §7.3). It marks nobody, and starts
+    /// the «Λείπει σήμανση» reminder for the alarm's names (SPEC §7.6).
     pub fn stop(&self, state: &AppState, id: u64) {
         let mut scheduler = lock(&self.scheduler);
-        if scheduler.stop(id) {
+        if let Some(keys) = scheduler.stop(id) {
             state.save_handled_alarms(&scheduler.handled());
+            drop(scheduler);
+            let mut reminders = lock(&self.reminders);
+            let delay = reminder_delay(state.reminder_min());
+            if reminders.start(keys, state.clock.now(), delay).is_some() {
+                state.save_reminder_groups(reminders.groups());
+            }
         }
-        drop(scheduler);
         state.alarm_wake.notify_one();
+    }
+
+    /// «Εντάξει» on the reminder: its reminders end on this device only. It
+    /// marks nobody.
+    pub fn reminder_ok(&self, state: &AppState, group_ids: &[u64]) {
+        let mut reminders = lock(&self.reminders);
+        if reminders.acknowledge(group_ids) {
+            state.save_reminder_groups(reminders.groups());
+        }
+        drop(reminders);
+        state.alarm_wake.notify_one();
+    }
+
+    /// Makes the reminder window match `state`; the C plays when a reminder
+    /// comes due (never while the alarm window shows: the core holds it).
+    fn apply_reminder(&self, app: &AppHandle, state: &ReminderState) {
+        *self
+            .reminder_view
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) =
+            state.reminder.as_ref().map(ReminderView::new);
+        if state.reminder.is_none() {
+            if let Some(window) = app.get_webview_window(REMINDER_WINDOW) {
+                let _ = window.destroy();
+            }
+            return;
+        }
+        let window = app.get_webview_window(REMINDER_WINDOW).or_else(|| {
+            self.open(
+                app,
+                REMINDER_WINDOW,
+                &text("reminder.windowTitle"),
+                (640.0, 560.0),
+            )
+        });
+        if state.chime {
+            self.player.chime();
+            #[cfg(windows)]
+            crate::power::wake_display();
+            if let Some(window) = window {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_always_on_top(true);
+                let _ = window.set_focus();
+                let _ = window.request_user_attention(Some(UserAttentionType::Critical));
+            }
+        }
     }
 
     /// Makes the window and the sound match `alarm`. `rang` is the
@@ -156,7 +281,7 @@ impl Alarms {
         };
         let window = app
             .get_webview_window(WINDOW)
-            .or_else(|| self.open_window(app));
+            .or_else(|| self.open(app, WINDOW, &text("alarm.windowTitle"), (760.0, 600.0)));
         if let RingPhase::Ringing { cycle, .. } = alarm.phase
             && *rang != Some((alarm.id, cycle))
         {
@@ -180,10 +305,18 @@ impl Alarms {
         }
     }
 
-    fn open_window(&self, app: &AppHandle) -> Option<WebviewWindow> {
-        let mut builder = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::default())
-            .title(text("alarm.windowTitle"))
-            .inner_size(760.0, 600.0)
+    /// Opens an alarm-like window: always on top, no close, minimise or
+    /// maximise button.
+    fn open(
+        &self,
+        app: &AppHandle,
+        label: &str,
+        title: &str,
+        (width, height): (f64, f64),
+    ) -> Option<WebviewWindow> {
+        let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::default())
+            .title(title)
+            .inner_size(width, height)
             .min_inner_size(480.0, 420.0)
             .center()
             .always_on_top(true)
@@ -214,7 +347,7 @@ impl Alarms {
             }
             Err(e) => {
                 // The sound still plays; the next evaluation tries again.
-                eprintln!("clock-in: could not open the alarm window: {e}");
+                eprintln!("clock-in: could not open the {label} window: {e}");
                 None
             }
         }
@@ -241,8 +374,16 @@ async fn run(app: AppHandle, state: Arc<AppState>, alarms: Arc<Alarms>, manage_a
         }
 
         refresh(&state, &mut last);
-        if lock(&alarms.scheduler).has_new_due(state.clock.now(), &last) {
-            // About to ring: get marks made elsewhere a moment ago first.
+        let delay = reminder_delay(state.reminder_min());
+        let now = state.clock.now();
+        let about_to_ring = lock(&alarms.scheduler).has_new_due(now, &last);
+        // A dry run on a copy: would a reminder come due now?
+        let about_to_remind = lock(&alarms.reminders)
+            .clone()
+            .evaluate(now, &last, delay, false)
+            .chime;
+        if about_to_ring || about_to_remind {
+            // Get marks made elsewhere a moment ago first.
             state.refresh_for_alarm().await;
             refresh(&state, &mut last);
         }
@@ -255,10 +396,21 @@ async fn run(app: AppHandle, state: Arc<AppState>, alarms: Arc<Alarms>, manage_a
             }
             decision
         };
+        let reminder = {
+            let mut reminders = lock(&alarms.reminders);
+            let held = decision.alarm.is_some();
+            let reminder = reminders.evaluate(now, &last, delay, held);
+            if reminder.changed {
+                state.save_reminder_groups(reminders.groups());
+            }
+            reminder
+        };
         alarms.apply(&app, decision.alarm.as_ref(), &mut rang);
+        alarms.apply_reminder(&app, &reminder);
 
-        let wait = Duration::try_from(decision.wake_at.duration_since(state.clock.now()))
-            .unwrap_or(Duration::ZERO);
+        let wake_at = decision.wake_at.min(reminder.wake_at);
+        let wait =
+            Duration::try_from(wake_at.duration_since(state.clock.now())).unwrap_or(Duration::ZERO);
         tokio::select! {
             () = tokio::time::sleep(wait) => {}
             () = state.alarm_wake.notified() => {}
@@ -325,6 +477,46 @@ mod tests {
         assert_eq!(view.rering_at.as_deref(), Some("09:10"));
     }
 
+    #[test]
+    fn the_reminder_view_shows_greek_times_and_what_to_mark() {
+        let at: Timestamp = "2026-06-01T06:00:00Z".parse().unwrap();
+        let mut out = item("Babis Beta", MarkKind::Out, at);
+        out.staff_id = Uuid::from_u128(2);
+        out.source_block_id = Uuid::from_u128(20);
+        let reminder = UnmarkedReminder {
+            group_ids: vec![3, 4],
+            check_in: vec![ReminderName {
+                item: item("Anna Alpha", MarkKind::In, at),
+                no_arrival_mark: false,
+            }],
+            check_out: vec![ReminderName {
+                item: out,
+                no_arrival_mark: true,
+            }],
+            next_at: Some("2026-06-01T06:20:00Z".parse().unwrap()),
+        };
+        let view = ReminderView::new(&reminder);
+        assert_eq!(view.group_ids, [3, 4]);
+        assert_eq!(view.check_in[0].name, "Anna Alpha");
+        assert_eq!(view.check_in[0].at, "09:00");
+        assert_eq!(view.check_in[0].kind, MarkKind::In);
+        let line = &view.check_out[0];
+        assert_eq!(line.staff_id, Uuid::from_u128(2));
+        assert_eq!(line.source_block_id, Uuid::from_u128(20));
+        assert_eq!(line.business_date, "2026-06-01");
+        assert!(line.no_arrival_mark);
+        assert_eq!(view.next_at.as_deref(), Some("09:20"));
+        let json = serde_json::to_value(&view).unwrap();
+        assert_eq!(json["checkOut"][0]["noArrivalMark"], true);
+        assert_eq!(json["checkOut"][0]["kind"], "out");
+        assert_eq!(json["groupIds"], serde_json::json!([3, 4]));
+        let last = ReminderView::new(&UnmarkedReminder {
+            next_at: None,
+            ..reminder
+        });
+        assert_eq!(last.next_at, None);
+    }
+
     /// Anna 09:00–17:00 and Babis 09:02–17:00 on Monday 1 June 2026 (Greek
     /// summer time: 09:00 = 06:00 UTC).
     fn overlapping() -> Snapshot {
@@ -387,11 +579,11 @@ mod tests {
 
         // A Stop from a window that still showed the 09:00 version is
         // ignored: sound and window both stay.
-        assert!(!s.stop(first.id));
+        assert!(s.stop(first.id).is_none());
         assert_eq!(output(&mut s, "06:02", &snap).1, ringing_in);
 
         // Stop on the current version: both end at once, for good.
-        assert!(s.stop(joined.id));
+        assert!(s.stop(joined.id).is_some());
         assert_eq!(output(&mut s, "06:02", &snap).1, off);
 
         // Then Anna is marked: still nothing, also at the re-ring time.
@@ -442,7 +634,7 @@ mod tests {
                 window: true
             }
         );
-        assert!(s.stop(alarm.unwrap().id));
+        assert!(s.stop(alarm.unwrap().id).is_some());
         assert_eq!(
             output(&mut s, "06:07", &snap).1,
             Output {

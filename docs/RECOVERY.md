@@ -23,6 +23,7 @@ Contents
 12. [The signing key is lost or broken](#12-the-signing-key-is-lost-or-broken)
 13. [Android developer verification (2027)](#13-android-developer-verification-2027)
 14. [Set up a new laptop for building Clock In](#14-set-up-a-new-laptop-for-building-clock-in)
+15. [The «Λείπει σήμανση» reminder (1.1.0)](#15-the-λείπει-σήμανση-reminder-110)
 
 ---
 
@@ -128,6 +129,17 @@ to `crash.log` (§7). That is the same path as a real crash.
 Updates keep the pairing, the settings and today's marks. Do it outside
 opening hours if you can.
 
+**Versions that change the database (1.1.0 does):** the order is always
+
+1. Claude Code applies the database change to prod, and only after you
+   write that you approve it. The installed 1.0.0 apps keep working against
+   the changed database.
+2. Then the shop PC (this section).
+3. Then the phone (section 6).
+
+The shop PC goes first because it sends the alarm plan the phone checks
+against; the 1.1.0 fix for long-ringing phone alarms needs the 1.1.0 PC.
+
 **One-time: AnyDesk unattended access** (so you can connect without anyone
 at the PC):
 
@@ -177,7 +189,8 @@ Manager, but there is no reason to risk it.
       tap the file again.
    3. If MIUI or Google Play Protect warns: **More details / Περισσότερα →
       Install anyway / Εγκατάσταση ούτως ή άλλως**.
-   4. Open Clock In. It is still paired.
+   4. Open Clock In. It is still paired. (Opening it once matters: on 1.1.0
+      the «Λείπει σήμανση» reminders start on the phone only after that.)
 4. Ask him for a screenshot of **☰ → «Διαγνωστικά»** (section 8): the version
    is the new one and every setting is ✓ (or «δεν υπάρχει σε αυτή την
    έκδοση Android»).
@@ -443,3 +456,26 @@ and §6 (Android Studio). Then:
    SETUP §4 and §5.
 8. Start a Claude Code session in `C:\dev\clock-in` and ask it to check every
    tool's version.
+
+## 15. The «Λείπει σήμανση» reminder (1.1.0)
+
+What it is: if someone presses **Σταμάτημα** on an alarm without marking the
+person, the device reminds them with a short single note after a few
+minutes (10 unless changed), and again every few minutes, until **Εντάξει**,
+until everyone is marked, or until the business day ends.
+
+- **Change the minutes or turn it off:** gear ⚙ → passphrase →
+  **Ρυθμίσεις → Ειδοποιήσεις** → «Υπενθύμιση αν λείπει σήμανση» → pick the minutes, or
+  **Όχι** to turn it off → save. It applies to every device.
+- **«Εντάξει»** stops the reminder only on the device where it was pressed,
+  and marks nobody. The other device still reminds.
+- **Phone, «Σήμανση» says «Χωρίς σύνδεση…»:** the phone had no internet, so
+  nobody was marked. Mark from the Clock In list instead; it keeps the mark
+  and sends it when the internet is back.
+- **Phone, «Σήμανση» asks to unlock:** that is on purpose; «Εντάξει» works
+  without unlocking.
+- **Phone silent in Do Not Disturb:** on purpose; the reminder still shows
+  on the screen. Only the alarm itself rings through Do Not Disturb.
+- **Someone shows «Έφυγε — χωρίς σήμανση άφιξης»:** they were marked as left
+  from the reminder without ever being marked as arrived. Nothing is broken;
+  correct it in **Ρυθμίσεις → Σημερινές σημάνσεις** if it was a mistake.

@@ -8,8 +8,8 @@
 use super::{Dev, dev_as_is};
 use uuid::Uuid;
 
-/// The 20 RPCs of ARCHITECTURE §6, in name order.
-const RPCS: [&str; 20] = [
+/// The 21 RPCs of ARCHITECTURE §6, in name order.
+const RPCS: [&str; 21] = [
     "admin_initialize",
     "admin_login",
     "admin_logout",
@@ -26,6 +26,7 @@ const RPCS: [&str; 20] = [
     "pair_device",
     "schedule_set",
     "settings_update",
+    "settings_update_v2",
     "staff_create",
     "staff_remove",
     "staff_update",
@@ -65,7 +66,7 @@ async fn names(dev: &Dev, sql: &str) -> Vec<String> {
 async fn security_advisor_findings_are_the_expected_ones() {
     let dev = dev_as_is().await;
 
-    // Lint 0028, "anon can execute a SECURITY DEFINER function": exactly the 20 RPCs.
+    // Lint 0028, "anon can execute a SECURITY DEFINER function": exactly the 21 RPCs.
     let definer = names(
         &dev,
         "select p.proname::text from pg_proc p join pg_namespace n on n.oid = p.pronamespace

@@ -99,6 +99,9 @@ class PlanWorker(context: Context, params: WorkerParameters) : Worker(context, p
             val planHorizon = plan.optString("horizon_end", "").let { PlanItem.parseInstantMs(it) }
             synchronized(Store.LOCK) {
                 store.setPlan(Plan(plan.optLong("plan_config_version", planVersion), planHorizon, items))
+                // The «Λείπει σήμανση» setting (1.1.0 servers): changed in
+                // Settings while this app was closed.
+                if (plan.has("unmarked_reminder_min")) store.setReminderMin(plan.optInt("unmarked_reminder_min", store.reminderMin()))
             }
             Ring.onPlanChanged(context)
         }

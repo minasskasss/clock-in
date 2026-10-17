@@ -40,6 +40,9 @@ const SETTING_LOCKOUT_UNTIL: &str = "lockout_until";
 /// Alarms this device already rang and that were stopped or ended.
 #[cfg(desktop)]
 const SETTING_ALARMS_HANDLED: &str = "alarms_handled";
+/// «Λείπει σήμανση» reminders pending on this device (SPEC §7.6).
+#[cfg(desktop)]
+const SETTING_REMINDERS: &str = "unmarked_reminders";
 /// Android: ring or notification (SPEC §8.2), per device.
 const SETTING_ALERT_MODE: &str = "alert_mode";
 const SETTING_THEME: &str = "theme";
@@ -885,6 +888,17 @@ impl AppState {
         Ok(())
     }
 
+    /// The «Λείπει σήμανση» setting in minutes (0 = off), the default until
+    /// the first sync.
+    #[must_use]
+    pub fn reminder_min(&self) -> i32 {
+        self.with_snapshot(|s| {
+            s.map_or(clockin_core::DEFAULT_REMINDER_MIN, |s| {
+                s.settings.unmarked_reminder_min
+            })
+        })
+    }
+
     /// The quit code currently in force, for settings saves that keep it.
     #[must_use]
     pub fn current_quit_code(&self) -> Option<QuitCode> {
@@ -939,6 +953,30 @@ impl AppState {
             lock(&self.ui_store).set_device_setting(SETTING_ALARMS_HANDLED, &json, Timestamp::now())
         {
             eprintln!("clock-in: could not save the stopped alarms: {e}");
+        }
+    }
+
+    /// The «Λείπει σήμανση» reminders pending on this device.
+    #[cfg(desktop)]
+    #[must_use]
+    pub fn reminder_groups(&self) -> Vec<clockin_core::ReminderGroup> {
+        lock(&self.ui_store)
+            .device_setting(SETTING_REMINDERS)
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default()
+    }
+
+    #[cfg(desktop)]
+    pub fn save_reminder_groups(&self, groups: &[clockin_core::ReminderGroup]) {
+        let Ok(json) = serde_json::to_string(groups) else {
+            return;
+        };
+        if let Err(e) =
+            lock(&self.ui_store).set_device_setting(SETTING_REMINDERS, &json, Timestamp::now())
+        {
+            eprintln!("clock-in: could not save the reminders: {e}");
         }
     }
 

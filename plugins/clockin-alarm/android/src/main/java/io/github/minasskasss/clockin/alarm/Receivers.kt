@@ -58,6 +58,8 @@ class AlarmReceiver : BroadcastReceiver() {
         val at = intent.getLongExtra(EXTRA_AT, 0)
         when (intent.action) {
             ACTION_RERING -> RingService.start(context, RingService.ACTION_RERING, at)
+            // «Λείπει σήμανση» (SPEC §7.6): its own action and request code.
+            Reminders.ACTION_FIRE -> ReminderService.start(context)
             ACTION_FIRE -> {
                 if (Store.get(context).alertMode() == Store.MODE_RING) {
                     // Started at once: an exact alarm may start a foreground
@@ -77,7 +79,11 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    /** Notification mode (SPEC §7.4): one notification, no service, no repeats. */
+    /**
+     * Notification mode (SPEC §7.4): one notification, no service, no
+     * repeats. Its names get the «Λείπει σήμανση» reminder, counted from
+     * when it was posted (there is no «Σταμάτημα» in this mode, SPEC §7.6).
+     */
     private fun notifyOnce(context: Context, at: Long) {
         val store = Store.get(context)
         val candidates = synchronized(Store.LOCK) {
@@ -86,8 +92,10 @@ class AlarmReceiver : BroadcastReceiver() {
         }
         val due = Checker.stillDue(context, candidates)
         if (due.isNotEmpty()) {
-            store.recordAlarm(System.currentTimeMillis(), "notificationMode")
+            val now = System.currentTimeMillis()
+            store.recordAlarm(now, "notificationMode")
             Notifications.showReminder(context, due, at / 60_000L)
+            Reminders.start(context, due, now)
         }
         synchronized(Store.LOCK) { store.markHandled(candidates, System.currentTimeMillis()) }
         AlarmScheduler.reschedule(context)
@@ -96,7 +104,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
 /**
  * «Σταμάτημα» on the ringing or silent notification, and the same
- * notifications swiped away (they are posted again while the cycle lasts).
+ * notifications swiped away (they are posted again while the cycle lasts);
+ * «Εντάξει» on the «Λείπει σήμανση» notification.
  */
 class StopReceiver : BroadcastReceiver() {
     companion object {
@@ -108,6 +117,8 @@ class StopReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_STOP -> Ring.stop(context)
             ACTION_REPOST -> Ring.repost(context)
+            Reminders.ACTION_OK ->
+                Reminders.ok(context, intent.getLongArrayExtra(Reminders.EXTRA_GROUPS)?.toList() ?: emptyList())
         }
     }
 }

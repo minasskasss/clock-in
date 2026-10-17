@@ -1,13 +1,17 @@
-//! Synthesises the two alarm sounds into `assets/sounds/` (ARCHITECTURE §11):
+//! Synthesises the alarm sounds into `assets/sounds/` (ARCHITECTURE §11):
 //!
 //! - `check-in.wav`: a bright, rising three-note major arpeggio (C5–E5–G5)
 //!   with a soft bell timbre;
 //! - `check-out.wav`: a softer, falling two-note figure (G5–C5) with a rounder
-//!   timbre and a gentler attack.
+//!   timbre and a gentler attack;
+//! - `reminder.wav`: the «Λείπει σήμανση» reminder (SPEC §7.6), a single C5,
+//!   the first note of `check-in.wav` (same partials and attack) at the
+//!   check-in's peak level, 1 s long with its natural decay, played once.
 //!
-//! Both are 44.1 kHz, 16-bit mono, exactly 2 s long, and start and end on
-//! silence so they loop seamlessly. The output is fully deterministic (no
-//! randomness), so re-running the tool reproduces the committed files.
+//! All are 44.1 kHz, 16-bit mono and start and end on silence; the alarm
+//! sounds are exactly 2 s long so they loop seamlessly, the reminder 1 s. The
+//! output is fully deterministic (no randomness), so re-running the tool
+//! reproduces the committed files.
 //!
 //! Usage: `cargo run -p gen-sounds [-- <output dir>]`
 
@@ -15,8 +19,10 @@ use std::f64::consts::PI;
 use std::path::{Path, PathBuf};
 
 const SAMPLE_RATE: u32 = 44_100;
-const LOOP_SECONDS: f64 = 2.0;
-const SAMPLES: usize = 88_200; // SAMPLE_RATE × LOOP_SECONDS
+/// The alarm sounds' loop: 2 s.
+const SAMPLES: usize = 88_200;
+/// The reminder: 1 s.
+const REMINDER_SAMPLES: usize = 44_100;
 
 /// One partial of a bell-like tone: frequency ratio to the fundamental,
 /// relative amplitude, and decay time constant in seconds.
@@ -100,13 +106,16 @@ const G5: f64 = 783.991;
 
 /// Final fade so the loop point is exactly silent.
 const RELEASE_S: f64 = 0.25;
+/// The reminder's fade: its C is still ringing at 1 s, so it fades out over
+/// the last 0.35 s, smoothly enough to sound like it died away.
+const REMINDER_RELEASE_S: f64 = 0.35;
 
 /// Peak level of each sound (full scale = 1.0).
 const CHECK_IN_PEAK: f64 = 0.89; // ≈ −1 dBFS
 const CHECK_OUT_PEAK: f64 = 0.63; // ≈ −4 dBFS, softer
 
-fn check_in() -> Vec<i16> {
-    let notes = [
+fn check_in_notes() -> [Note; 3] {
+    [
         Note {
             freq: C5,
             onset_s: 0.00,
@@ -122,8 +131,20 @@ fn check_in() -> Vec<i16> {
             onset_s: 0.32,
             gain: 1.00,
         },
-    ];
-    render(&BELL, &notes, CHECK_IN_PEAK)
+    ]
+}
+
+fn check_in() -> Vec<i16> {
+    let raw = render(&BELL, &check_in_notes(), SAMPLES, RELEASE_S);
+    to_pcm(&raw, scale_for(&raw, CHECK_IN_PEAK))
+}
+
+/// The check-in's first note alone, as loud as the check-in at its peak
+/// (inside the arpeggio that note alone peaks about 6.5 dB lower).
+fn reminder() -> Vec<i16> {
+    let [first, ..] = check_in_notes();
+    let raw = render(&BELL, &[first], REMINDER_SAMPLES, REMINDER_RELEASE_S);
+    to_pcm(&raw, scale_for(&raw, CHECK_IN_PEAK))
 }
 
 fn check_out() -> Vec<i16> {
@@ -139,12 +160,16 @@ fn check_out() -> Vec<i16> {
             gain: 1.00,
         },
     ];
-    render(&SOFT, &notes, CHECK_OUT_PEAK)
+    let raw = render(&SOFT, &notes, SAMPLES, RELEASE_S);
+    to_pcm(&raw, scale_for(&raw, CHECK_OUT_PEAK))
 }
 
-fn render(voice: &Voice, notes: &[Note], peak: f64) -> Vec<i16> {
+/// `len` samples of `notes`, ending in a cosine fade of `release_s` to
+/// exactly zero.
+fn render(voice: &Voice, notes: &[Note], len: usize, release_s: f64) -> Vec<f64> {
     let rate = f64::from(SAMPLE_RATE);
-    let mut buf = vec![0.0_f64; SAMPLES];
+    let seconds = len as f64 / rate;
+    let mut buf = vec![0.0_f64; len];
     for note in notes {
         for (i, sample) in buf.iter_mut().enumerate() {
             let t = i as f64 / rate - note.onset_s;
@@ -167,22 +192,30 @@ fn render(voice: &Voice, notes: &[Note], peak: f64) -> Vec<i16> {
             *sample += note.gain * attack * tone;
         }
     }
-    // Release: cosine fade to exactly zero at the loop point.
-    let release_start = LOOP_SECONDS - RELEASE_S;
+    // Release: cosine fade to exactly zero at the end (the loop point).
+    let release_start = seconds - release_s;
     for (i, sample) in buf.iter_mut().enumerate() {
         let t = i as f64 / rate;
         if t >= release_start {
-            let x = ((t - release_start) / RELEASE_S).min(1.0);
+            let x = ((t - release_start) / release_s).min(1.0);
             *sample *= 0.5 + 0.5 * (PI * x).cos();
         }
     }
-    buf[SAMPLES - 1] = 0.0;
-    let max = buf.iter().fold(0.0_f64, |m, s| m.max(s.abs()));
-    let scale = if max > 0.0 { peak / max } else { 0.0 };
-    buf.iter()
+    buf[len - 1] = 0.0;
+    buf
+}
+
+/// The scale that puts the loudest sample of `raw` at `peak`.
+fn scale_for(raw: &[f64], peak: f64) -> f64 {
+    let max = raw.iter().fold(0.0_f64, |m, s| m.max(s.abs()));
+    if max > 0.0 { peak / max } else { 0.0 }
+}
+
+fn to_pcm(raw: &[f64], scale: f64) -> Vec<i16> {
+    raw.iter()
         .map(|s| {
             let v = (s * scale * f64::from(i16::MAX)).round();
-            // `peak` ≤ 1, so `v` is always inside the i16 range.
+            // Every scale puts the peak at ≤ 1, so `v` is inside the i16 range.
             v.clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16
         })
         .collect()
@@ -211,6 +244,14 @@ fn wav_bytes(samples: &[i16]) -> Vec<u8> {
     out
 }
 
+fn sounds() -> [(&'static str, Vec<i16>); 3] {
+    [
+        ("check-in.wav", check_in()),
+        ("check-out.wav", check_out()),
+        ("reminder.wav", reminder()),
+    ]
+}
+
 fn default_out_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/sounds")
 }
@@ -220,7 +261,7 @@ fn main() -> std::io::Result<()> {
         .nth(1)
         .map_or_else(default_out_dir, PathBuf::from);
     std::fs::create_dir_all(&out_dir)?;
-    for (name, samples) in [("check-in.wav", check_in()), ("check-out.wav", check_out())] {
+    for (name, samples) in sounds() {
         let path = out_dir.join(name);
         std::fs::write(&path, wav_bytes(&samples))?;
         println!("wrote {}", path.display());
@@ -292,6 +333,40 @@ mod tests {
     }
 
     #[test]
+    fn reminder_is_one_second_of_the_check_in_s_first_c() {
+        let s = reminder();
+        assert_eq!(s.len(), REMINDER_SAMPLES);
+        assert_eq!(s[0], 0, "starts on silence");
+        assert_eq!(s[REMINDER_SAMPLES - 1], 0, "ends on silence");
+        assert!(s[REMINDER_SAMPLES - 441..].iter().all(|x| x.abs() < 50));
+        // A single C5: no E5 or G5.
+        let c = energy(&s, C5, 0.02, 0.6);
+        assert!(c > 100.0 * energy(&s, E5, 0.02, 0.6));
+        assert!(c > 100.0 * energy(&s, G5, 0.02, 0.6));
+        // Same pitch and timbre as the check-in's first note: the same
+        // waveform, only louder, until the E5 comes in at 0.16 s.
+        let cin = check_in();
+        let until = (0.16 * f64::from(SAMPLE_RATE)) as usize;
+        let pairs: Vec<(f64, f64)> = s[..until]
+            .iter()
+            .zip(&cin[..until])
+            .filter(|(_, b)| b.abs() > 1000)
+            .map(|(a, b)| (f64::from(*a), f64::from(*b)))
+            .collect();
+        let gain = pairs[0].0 / pairs[0].1;
+        assert!(gain > 1.5, "louder than the note inside the arpeggio");
+        assert!(
+            pairs
+                .iter()
+                .all(|(a, b)| (a / b - gain).abs() < 0.01 * gain)
+        );
+        // The check-in's peak level; and it decays.
+        let full = f64::from(i16::MAX);
+        assert!((f64::from(peak(&s)) / full - CHECK_IN_PEAK).abs() < 0.001);
+        assert!(rms(&s[22_050..]) < 0.5 * rms(&s[..22_050]));
+    }
+
+    #[test]
     fn wav_header_is_canonical_pcm() {
         let bytes = wav_bytes(&check_in());
         assert_eq!(bytes.len(), 44 + SAMPLES * 2);
@@ -317,7 +392,7 @@ mod tests {
     #[test]
     fn committed_files_match_the_generator() {
         let dir = default_out_dir();
-        for (name, samples) in [("check-in.wav", check_in()), ("check-out.wav", check_out())] {
+        for (name, samples) in sounds() {
             let committed = std::fs::read(dir.join(name))
                 .unwrap_or_else(|e| panic!("{name}: {e}; run `cargo run -p gen-sounds`"));
             let expected = wav_bytes(&samples);

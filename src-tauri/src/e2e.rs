@@ -159,6 +159,7 @@ fn e2e_against_dev() {
             rollover: state.rollover(),
             autostart: true,
             quit_code: QuitCode::new("9876".into()),
+            unmarked_reminder_min: 15,
         };
         state
             .admin_call(|api, secret, session| async move {
@@ -167,6 +168,7 @@ fn e2e_against_dev() {
             .await
             .unwrap();
         assert_eq!(state.current_quit_code().unwrap().expose(), "9876");
+        assert_eq!(state.reminder_min(), 15);
 
         // Change the passphrase: the session ends, the old one fails.
         let new_passphrase = crate::passgen::generate().unwrap();

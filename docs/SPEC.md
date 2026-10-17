@@ -78,9 +78,12 @@ Overrides leave the weekly template untouched. Settings lists upcoming overrides
 | Check-out alarm offset (minutes relative to block end) | 0 | −60 … +30 |
 | Business-day rollover hour | 05:00 | 00:00 … 08:00 |
 | Start with Windows (shop PC) | on | — |
+| «Λείπει σήμανση» reminder (§7.6): minutes after **Stop** (in Notification mode, after the notification) | 10 | Off, 5, 10, 15, 20, 30, 45, 60 (stored as 0 … 60, 0 = off) |
 | Quit code (Windows, see §8.1; changed in the **Κωδικοί** section with the passphrase, §4.6) | set at first run | exactly 4 digits; a new code equal to the current one is refused |
 
 The repeat cycle (ring 5 minutes, silent 5 minutes) is fixed in v1.
+
+The reminder setting is in the **Ειδοποιήσεις** section (since 1.1.0). A 1.0.0 device saving that section leaves it unchanged.
 
 ### 4.5 Today's marks (correction)
 
@@ -116,6 +119,8 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
   - Tap a **pending** row → confirm "Mark ⟨name⟩ as checked in?" → the row turns green.
   - Tap a **checked-in** row → confirm "Mark ⟨name⟩ as left?" → a red line appears through the row.
   - Tapping a **left** row does nothing.
+  - The «Λείπει σήμανση» reminder (§7.6) marks the same way, with the same question.
+  - Someone marked as left without a check-in mark (possible from the reminder) shows as **left**, like any other left row, with a small note «χωρίς σήμανση άφιξης» ("no check-in mark"). It is never shown as pending or as an error.
   - There is no undo. Only the employer can correct marks (§4.5).
 - **Marks can be made at any time**, including before the scheduled time. A mark made before an alarm is due **prevents that alarm on every device** (§7.2).
 - **Empty state:** "Κανείς δεν δουλεύει σήμερα" ("Nobody is working today").
@@ -155,9 +160,10 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
   - rings for 5 minutes;
   - if not stopped, stays silent for 5 minutes and then rings again;
   - this repeats until **Stop** is pressed on that device.
-- Before each repeat, names already marked are dropped. If no names are left, the cycle ends by itself.
+- Before each repeat, names already marked are dropped. If no names are left, the cycle ends by itself. Names whose alarm was removed (§7.2) are dropped too. Nothing else ends a cycle: it keeps its names however long it rings or stays silent, including after the business day turns over.
 - **Stop affects only the device it was pressed on.**
-- **Stop does not mark anyone.** Marking is always done on the row (§6).
+- **Stop does not mark anyone.** Marking is always done on the row (§6) or from the reminder (§7.6).
+- If anyone the alarm named is still unmarked when **Stop** is pressed, the «Λείπει σήμανση» reminder (§7.6) follows.
 
 ### 7.4 Notification mode (Android option)
 
@@ -165,6 +171,7 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
 - It uses the standard notification sound, with no looping and no repeats.
 - It follows the phone's Do Not Disturb: while DND is on, the notification still appears but makes no sound, so the phone can stay quiet at night. (Ring mode is an alarm and rings through DND.)
 - Tapping it opens the app.
+- If anyone it named is still unmarked, the «Λείπει σήμανση» reminder (§7.6) follows, counted from when the notification appeared.
 
 ### 7.5 Reliability requirements
 
@@ -174,6 +181,31 @@ The **business day** runs from the rollover hour on day D to the rollover hour o
 - **Daylight saving:**
   - spring-forward: a time that doesn't exist fires at the next valid minute;
   - fall-back: an ambiguous time fires at its first occurrence.
+
+### 7.6 «Λείπει σήμανση» reminder (since 1.1.0)
+
+A ringing alarm can be stopped without marking anyone. The reminder catches that.
+
+- **When:** N minutes (§4.4, default 10) after **Stop** in Ring mode, or after the notification appeared in Notification mode, if at least one of the alarm's names is still unmarked. With the setting **Off** there are no reminders.
+- **What shows:**
+  - Windows: an always-on-top window; on Android, in Ring mode, a full-screen screen (also over the lock screen); in Notification mode, an ordinary notification.
+  - Only the names still unmarked, under «Άφιξη» and «Αποχώρηση», each with its own alarm time.
+  - Each name has a **Σήμανση** button that asks the same question as the Today list (§6) and marks.
+  - Below the names: when the next reminder comes, or that this is the last one for the day.
+  - One large **Εντάξει** button.
+  - In Android Notification mode the notification has **Εντάξει**, and tapping it opens the app.
+- **Sound:** one short C (about 1 second, the first note of the check-in sound, generated like the others), once per reminder. It is not an alarm and never loops.
+- **Repeats:** every N minutes until **Εντάξει** is pressed or nobody is left. When everyone in it is marked (on any device), the reminder closes by itself. A name marked, removed or moved elsewhere disappears from it (on the phone at the next reminder, or within half a minute while its screen is open).
+- **Never past the business day:** no reminder fires after the end of the business day its alarm belongs to (§5). Removed or moved shifts and days off give no reminder.
+- **Waits for alarms:** while an alarm is ringing or silent between rings, a due reminder waits until that alarm ends.
+- **Εντάξει** affects only the device it was pressed on, like **Stop**, and marks nobody.
+- **Android:**
+  - **Σήμανση** needs the phone unlocked; **Εντάξει** does not.
+  - **Σήμανση** on the phone's reminder screen goes straight to the server. Offline it marks nothing and says so («Χωρίς σύνδεση: η σήμανση δεν έγινε…»); the Today list still queues offline marks as usual.
+  - Reminders follow Do Not Disturb in both modes: under DND the screen or notification still appears, silently. Only the alarm itself rings through DND (§7.3).
+  - While the app is open, the Today view also shows a «Λείπει σήμανση» bar with the names and **Εντάξει**.
+  - A change to the rollover hour reaches the phone's reminders when the app is next opened.
+- A reminder pending when the device restarts still comes, at its time.
 
 ## 8. Platform behaviour
 

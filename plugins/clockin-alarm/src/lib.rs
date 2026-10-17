@@ -30,6 +30,21 @@ pub struct BridgeItem {
     /// `in` or `out`.
     pub kind: &'static str,
     pub name: String,
+    /// What «Σήμανση» on the reminder screen marks (lowercase uuids, ISO date).
+    pub staff_id: String,
+    pub source_block_id: String,
+    pub business_date: String,
+}
+
+/// When one business date ends (`clockin-core::reminder_cutoff`), so the
+/// «Λείπει σήμανση» reminder never runs past it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeDayEnd {
+    /// ISO business date.
+    pub date: String,
+    /// Epoch milliseconds.
+    pub end: i64,
 }
 
 /// A period, in epoch milliseconds, `[start, end)`.
@@ -56,6 +71,19 @@ pub struct BridgePlan {
     /// When the automatic theme is dark (`clockin-core::auto_dark_windows`),
     /// so Kotlin only compares instants.
     pub dark_windows: Vec<BridgeWindow>,
+    /// The «Λείπει σήμανση» delay in minutes; 0 = off.
+    pub reminder_min: i32,
+    /// The end of each business date from yesterday on (SPEC §7.6 cut-off).
+    pub day_ends: Vec<BridgeDayEnd>,
+}
+
+/// The «Λείπει σήμανση» reminder showing on this phone, if any.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ReminderStatus {
+    /// Pass back to `reminder_ok`; empty when nothing shows.
+    pub group_ids: Vec<i64>,
+    pub names: Vec<String>,
 }
 
 /// The ring-mode alarm cycle in progress on this phone, if any.
@@ -174,12 +202,20 @@ mod tests {
                 fires_at: "2026-10-06T07:00:00Z".into(),
                 kind: "in",
                 name: "Μαρία Παππά".into(),
+                staff_id: "s".into(),
+                source_block_id: "b".into(),
+                business_date: "2026-10-06".into(),
             }],
             alert_mode: "ring",
             config_version: 7,
             horizon_end: None,
             theme: "auto",
             dark_windows: vec![BridgeWindow { start: 1, end: 2 }],
+            reminder_min: 10,
+            day_ends: vec![BridgeDayEnd {
+                date: "2026-10-06".into(),
+                end: 3,
+            }],
         };
         assert_eq!(
             serde_json::to_value(&plan).unwrap(),
@@ -189,14 +225,29 @@ mod tests {
                     "firesAt": "2026-10-06T07:00:00Z",
                     "kind": "in",
                     "name": "Μαρία Παππά",
+                    "staffId": "s",
+                    "sourceBlockId": "b",
+                    "businessDate": "2026-10-06",
                 }],
                 "alertMode": "ring",
                 "configVersion": 7,
                 "horizonEnd": null,
                 "theme": "auto",
                 "darkWindows": [{ "start": 1, "end": 2 }],
+                "reminderMin": 10,
+                "dayEnds": [{ "date": "2026-10-06", "end": 3 }],
             })
         );
+    }
+
+    #[test]
+    fn the_reminder_status_reads_kotlins_answer() {
+        let s: ReminderStatus =
+            serde_json::from_str(r#"{"groupIds":[3,4],"names":["Μαρία Παππά"]}"#).unwrap();
+        assert_eq!(s.group_ids, [3, 4]);
+        assert_eq!(s.names, ["Μαρία Παππά"]);
+        let empty: ReminderStatus = serde_json::from_str("{}").unwrap();
+        assert!(empty.group_ids.is_empty());
     }
 
     #[test]

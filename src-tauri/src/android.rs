@@ -15,7 +15,9 @@ use std::path::Path;
 use std::sync::{Arc, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, Wry};
-use tauri_plugin_clockin_alarm::{AlarmBridge, AlarmStatus, BridgePlan, PermissionStatus};
+use tauri_plugin_clockin_alarm::{
+    AlarmBridge, AlarmStatus, BridgePlan, PermissionStatus, ReminderStatus,
+};
 use tokio::sync::Notify;
 
 /// How often the checklist is re-read (the user may come back from Android's settings).
@@ -28,6 +30,7 @@ const RESEND_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 pub struct Android {
     status: RwLock<Option<PermissionStatus>>,
     alarm: RwLock<AlarmStatus>,
+    reminder: RwLock<ReminderStatus>,
     /// Re-send the plan now (alert mode or theme changed).
     pub wake: Notify,
 }
@@ -57,6 +60,22 @@ impl Android {
 
     pub fn set_alarm(&self, alarm: AlarmStatus) {
         *self.alarm.write().unwrap_or_else(PoisonError::into_inner) = alarm;
+    }
+
+    /// The «Λείπει σήμανση» reminder showing, as last read.
+    #[must_use]
+    pub fn reminder(&self) -> ReminderStatus {
+        self.reminder
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn set_reminder(&self, reminder: ReminderStatus) {
+        *self
+            .reminder
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = reminder;
     }
 }
 
@@ -137,6 +156,7 @@ async fn feed(app: AppHandle, state: Arc<AppState>, android: Arc<Android>) {
             state.theme().as_str(),
             state.config_version().unwrap_or(0),
             state.rollover(),
+            state.reminder_min(),
             Timestamp::now(),
         );
         // The horizon moves with the clock: it alone is no reason to re-send.
@@ -159,6 +179,9 @@ async fn feed(app: AppHandle, state: Arc<AppState>, android: Arc<Android>) {
         }
         if let Some(Ok(alarm)) = bridge(&app, |b| b.alarm_status()).await {
             android.set_alarm(alarm);
+        }
+        if let Some(Ok(reminder)) = bridge(&app, |b| b.reminder_status()).await {
+            android.set_reminder(reminder);
         }
         tokio::select! {
             () = tokio::time::sleep(STATUS_EVERY) => {}

@@ -45,6 +45,7 @@ export function row(overrides: Partial<Row> = {}): Row {
     endNextDay: false,
     status: "pending",
     nextMark: "in",
+    noArrivalMark: false,
     ...overrides,
   };
 }
@@ -87,7 +88,7 @@ export function adminView(overrides: Partial<AdminView> = {}): AdminView {
       },
     ],
     overrides: [],
-    settings: { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true },
+    settings: { checkinOffsetMin: 0, checkoutOffsetMin: 0, rollover: "05:00", autostart: true, unmarkedReminderMin: 10 },
     marks: [],
     devices: [
       {

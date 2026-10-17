@@ -18,7 +18,7 @@ use crate::secret::DeviceSecret;
 use crate::store::{CachedSnapshot, RefusedMark, Store, StoreError};
 use clockin_core::{
     MarkKind, PlanItem, Snapshot, alarm_plan, clock_skew_exceeded, horizon_short,
-    plan_needs_refresh, plan_window, sync_retry_delay,
+    plan_needs_refresh, sync_retry_delay, upload_window,
 };
 use jiff::civil::Date;
 use jiff::{SignedDuration, Timestamp};
@@ -408,7 +408,9 @@ impl<B: SyncBackend> SyncEngine<B> {
                 return Ok(());
             };
             let base = cached.snapshot.config_version;
-            let (from, until) = plan_window(now);
+            // Reaches back a business day, so check_alarm still answers for
+            // alarms that rang (ringing for a while, or reminded about).
+            let (from, until) = upload_window(now, cached.snapshot.settings.rollover);
             let items = alarm_plan(&cached.snapshot.core_snapshot(&[]), from, until);
             match self
                 .backend
@@ -501,7 +503,7 @@ mod tests {
     use super::*;
     use crate::api::{Rejection, ServerSettings};
     use crate::store::StoreKey;
-    use clockin_core::{Staff, WeeklyBlock};
+    use clockin_core::{Staff, WeeklyBlock, plan_window};
     use jiff::civil::{Time, Weekday, date};
     use std::sync::Mutex;
 
@@ -568,6 +570,7 @@ mod tests {
                     rollover: Time::constant(5, 0, 0, 0),
                     autostart: true,
                     quit_code: None,
+                    unmarked_reminder_min: 10,
                 },
                 marks: vec![],
                 devices: vec![],
@@ -773,6 +776,20 @@ mod tests {
         block_on(e.tick(later)).unwrap();
         e.backend().with(|s| assert_eq!(s.uploads.len(), 2));
         assert_eq!(e.status().plan_horizon_end, Some(plan_window(later).1));
+    }
+
+    #[test]
+    fn the_uploaded_plan_keeps_alarms_that_already_rang() {
+        // Monday 15:00 (Athens): the 12:00 check-in rang 3 hours ago and
+        // stays in the upload, so a phone's alarm or reminder for it keeps
+        // its name (`upload_window`). With a 15-minute look-back it would
+        // be 4 items: 16:00 today, both next Monday, 12:00 the one after.
+        let mut e = engine();
+        let afternoon = ts("2026-10-05T12:00:00Z");
+        block_on(e.tick(afternoon)).unwrap();
+        e.backend().with(|s| {
+            assert_eq!(s.uploads, [(4, plan_window(afternoon).1, 5)]);
+        });
     }
 
     #[test]

@@ -9,9 +9,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * A minimal client for the three RPCs the background code needs
- * (ARCHITECTURE §6, §10): `get_version`, `get_plan` and `check_alarm`. The
- * publishable key goes in the `apikey` header only (DECISIONS 2026-10-05).
+ * A minimal client for the RPCs the background code needs (ARCHITECTURE §6,
+ * §10): `get_version`, `get_plan`, `check_alarm`, and `mark` for «Σήμανση» on
+ * the reminder screen. The publishable key goes in the `apikey` header only
+ * (DECISIONS 2026-10-05).
  */
 internal class ServerApi(baseUrl: String, private val publishableKey: String) {
     private val rpcBase = baseUrl.trimEnd('/') + "/rest/v1/rpc/"
@@ -72,4 +73,21 @@ internal class ServerApi(baseUrl: String, private val publishableKey: String) {
         items.forEach { list.put(JSONObject().put("item_id", it.itemId).put("fires_at", it.firesAt)) }
         return call("check_alarm", JSONObject().put("p_secret", secret).put("p_items", list), timeoutMs)
     }
+
+    /**
+     * Marks `item`'s person in or out for its block (idempotent on
+     * `clientId`; a mark another device already made is returned as is).
+     */
+    fun mark(secret: String, clientId: String, item: PlanItem): Answer =
+        call(
+            "mark",
+            JSONObject()
+                .put("p_secret", secret)
+                .put("p_client_id", clientId)
+                .put("p_staff_id", item.staffId)
+                .put("p_source_block_id", item.sourceBlockId)
+                .put("p_business_date", item.businessDate)
+                .put("p_kind", item.kind),
+            5_000,
+        )
 }

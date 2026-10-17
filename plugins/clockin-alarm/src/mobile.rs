@@ -1,7 +1,7 @@
 //! Android: calls into the Kotlin `AlarmPlugin`. Every call blocks until
 //! Kotlin answers on the main thread (see the crate docs).
 
-use crate::{AlarmStatus, BridgePlan, Diagnostics, Insets, PermissionStatus};
+use crate::{AlarmStatus, BridgePlan, Diagnostics, Insets, PermissionStatus, ReminderStatus};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tauri::Runtime;
 use tauri::plugin::PluginHandle;
@@ -43,6 +43,12 @@ struct ServerConfig<'a> {
 #[derive(Serialize)]
 struct Done {
     done: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Groups<'a> {
+    group_ids: &'a [i64],
 }
 
 #[derive(Deserialize)]
@@ -156,6 +162,25 @@ impl<R: Runtime> AlarmBridge<R> {
     /// If the Kotlin call fails.
     pub fn stop_alarm(&self) -> Result<(), BridgeError> {
         self.call::<()>("stopAlarm", ())
+    }
+
+    /// The «Λείπει σήμανση» reminder showing on this phone, if any.
+    ///
+    /// # Errors
+    ///
+    /// If the Kotlin call fails.
+    pub fn reminder_status(&self) -> Result<ReminderStatus, BridgeError> {
+        self.call("reminderStatus", ())
+    }
+
+    /// «Εντάξει» on the Today bar: no more reminders for these alarms on
+    /// this phone. It marks nobody.
+    ///
+    /// # Errors
+    ///
+    /// If the Kotlin call fails.
+    pub fn reminder_ok(&self, group_ids: &[i64]) -> Result<(), BridgeError> {
+        self.call::<()>("reminderOk", Groups { group_ids })
     }
 
     /// # Errors

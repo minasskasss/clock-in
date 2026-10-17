@@ -6,9 +6,10 @@ plugins {
 }
 
 // Generated at build time from the repo's single sources (never committed):
-// res/raw/check_in.wav, check_out.wav from assets/sounds/, and
-// res/values/strings.xml from the "alarm" and "android" sections of
-// src/i18n/el.json (CLAUDE.md: every user-facing string lives in el.json).
+// res/raw/check_in.wav, check_out.wav, reminder.wav from assets/sounds/, and
+// res/values/strings.xml from the "alarm", "android", "reminder" and
+// "confirm" sections of src/i18n/el.json (CLAUDE.md: every user-facing string
+// lives in el.json).
 val repoRoot = projectDir.resolve("../../..").canonicalFile
 val generatedRes: File = layout.buildDirectory.dir("generated/clockin-res").get().asFile
 
@@ -23,11 +24,12 @@ val generateClockinResources = tasks.register("generateClockinResources") {
         val raw = out.resolve("raw").apply { mkdirs() }
         sounds.resolve("check-in.wav").copyTo(raw.resolve("check_in.wav"), overwrite = true)
         sounds.resolve("check-out.wav").copyTo(raw.resolve("check_out.wav"), overwrite = true)
+        sounds.resolve("reminder.wav").copyTo(raw.resolve("reminder.wav"), overwrite = true)
 
         @Suppress("UNCHECKED_CAST")
         val strings = JsonSlurper().parse(elJson, "UTF-8") as Map<String, Any?>
         val xml = StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- Generated from src/i18n/el.json. Do not edit. -->\n<resources>\n")
-        for (section in listOf("alarm", "android")) {
+        for (section in listOf("alarm", "android", "reminder", "confirm")) {
             @Suppress("UNCHECKED_CAST")
             val entries = strings[section] as? Map<String, Any?> ?: error("el.json has no \"$section\" section")
             for ((key, value) in entries) {

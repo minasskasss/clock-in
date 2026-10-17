@@ -19,6 +19,20 @@ class ItemArg {
     lateinit var firesAt: String
     lateinit var kind: String
     lateinit var name: String
+    var staffId: String = ""
+    var sourceBlockId: String = ""
+    var businessDate: String = ""
+}
+
+@InvokeArg
+class DayEndArg {
+    var date: String = ""
+    var end: Long = 0
+}
+
+@InvokeArg
+class GroupsArgs {
+    var groupIds: LongArray = LongArray(0)
 }
 
 @InvokeArg
@@ -35,6 +49,8 @@ class SetPlanArgs {
     var horizonEnd: String? = null
     var theme: String = "auto"
     var darkWindows: Array<WindowArg> = emptyArray()
+    var reminderMin: Int = 10
+    var dayEnds: Array<DayEndArg> = emptyArray()
 }
 
 @InvokeArg
@@ -96,15 +112,20 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun setPlan(invoke: Invoke) {
         val args = invoke.parseArgs(SetPlanArgs::class.java)
-        val items = args.items.mapNotNull { PlanItem.of(it.itemId, it.firesAt, it.kind, it.name) }
+        val items = args.items.mapNotNull {
+            PlanItem.of(it.itemId, it.firesAt, it.kind, it.name, it.staffId, it.sourceBlockId, it.businessDate)
+        }
         synchronized(Store.LOCK) {
             val store = Store.get(context)
             store.setAlertMode(args.alertMode)
             store.setPlan(Plan(args.configVersion, args.horizonEnd?.let { PlanItem.parseInstantMs(it) }, items))
             store.setTheme(args.theme, args.darkWindows.map { it.start to it.end })
+            store.setReminderMin(args.reminderMin)
+            if (args.dayEnds.isNotEmpty()) store.setDayEnds(args.dayEnds.associate { it.date to it.end })
         }
         Notifications.ensureChannels(context)
         Ring.onPlanChanged(context)
+        Reminders.onPlanChanged(context, items)
         AlarmScheduler.reschedule(context)
         PlanWorker.ensurePeriodic(context)
         invoke.resolve()
@@ -133,6 +154,24 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
         result.put("checkIn", names("in"))
         result.put("checkOut", names("out"))
         invoke.resolve(result)
+    }
+
+    /** The «Λείπει σήμανση» reminder showing, for the «Εντάξει» bar on Today. */
+    @Command
+    fun reminderStatus(invoke: Invoke) {
+        val (ids, names) = Reminders.status(context)
+        val result = JSObject()
+        result.put("groupIds", JSArray().apply { ids.forEach { put(it) } })
+        result.put("names", JSArray().apply { names.forEach { put(it) } })
+        invoke.resolve(result)
+    }
+
+    /** «Εντάξει» on Today: the same as on the reminder screen (marks nobody). */
+    @Command
+    fun reminderOk(invoke: Invoke) {
+        val args = invoke.parseArgs(GroupsArgs::class.java)
+        Reminders.ok(context, args.groupIds.toList())
+        invoke.resolve()
     }
 
     /** «Σταμάτημα» on Today: the same as on the alarm screen (marks nobody). */
@@ -216,7 +255,8 @@ class AlarmPlugin(private val activity: Activity) : Plugin(activity) {
         if (args.name == Secrets.DEVICE_SECRET) {
             // Unpaired: no more alarms on this device.
             synchronized(Store.LOCK) { Store.get(context).clearPlan() }
-            Ring.stop(context)
+            Ring.stop(context, remind = false)
+            Reminders.clear(context)
         }
         invoke.resolve()
     }

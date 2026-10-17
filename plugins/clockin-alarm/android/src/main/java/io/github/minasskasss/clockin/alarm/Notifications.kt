@@ -23,6 +23,10 @@ internal object Notifications {
     const val ID_SILENT = 1003
     const val ID_HORIZON = 1004
     const val ID_SETUP = 1005
+    /** The «Λείπει σήμανση» reminder (SPEC §7.6). */
+    const val ID_REMINDER = 1006
+    /** The reminder service's own "checking" notification (apart from the ring's). */
+    const val ID_CHECKING_REMINDER = 1007
     /** Notification-mode alarms use their minute as id, above this. */
     private const val ID_NOTIFY_BASE = 2000
 
@@ -92,6 +96,90 @@ internal object Notifications {
     private fun repostIntent(context: Context): PendingIntent {
         val intent = Intent(context, StopReceiver::class.java).setAction(StopReceiver.ACTION_REPOST)
         return PendingIntent.getBroadcast(context, 4, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** The «Λείπει σήμανση» screen, opened by the system (full screen) or by a tap. */
+    private fun reminderScreenIntent(context: Context, fullScreen: Boolean): PendingIntent {
+        val intent = Intent(context, ReminderActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+        return PendingIntent.getActivity(context, if (fullScreen) 7 else 6, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** «Εντάξει» on the reminder notification: ends the groups it showed. */
+    private fun reminderOkIntent(context: Context, groupIds: List<Long>): PendingIntent {
+        val intent = Intent(context, StopReceiver::class.java)
+            .setAction(Reminders.ACTION_OK)
+            .putExtra(Reminders.EXTRA_GROUPS, groupIds.toLongArray())
+        return PendingIntent.getBroadcast(context, 5, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /**
+     * Do Not Disturb is on (anything but "all interruptions"): the
+     * notification-mode alarm and every reminder stay silent.
+     */
+    fun doNotDisturb(context: Context): Boolean =
+        context.getSystemService(NotificationManager::class.java)
+            ?.currentInterruptionFilter
+            ?.let { it != NotificationManager.INTERRUPTION_FILTER_ALL && it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN }
+            ?: false
+
+    /**
+     * Posts, updates or removes the «Λείπει σήμανση» reminder (SPEC §7.6):
+     * the names still not marked, each with its own time, and «Εντάξει».
+     * Ring mode: the full-screen reminder screen on the alarm channel (no
+     * sound of its own; the reminder service plays the C). Notification
+     * mode: an ordinary notification, always silent here for the same
+     * reason. `alert`: a new reminder (full screen again, heads-up); else
+     * only the content changes.
+     */
+    fun showUnmarked(context: Context, alert: Boolean) {
+        val (groups, items) = Reminders.showing(context)
+        if (items.isEmpty()) {
+            cancel(context, ID_REMINDER)
+            return
+        }
+        val next = Reminders.nextShown(context)
+        val nextLine = if (next != null) {
+            context.getString(R.string.clockin_reminder_next, Ring.hhmm(next))
+        } else {
+            context.getString(R.string.clockin_reminder_last)
+        }
+        val text = reminderLines(context, items) + "\n" + nextLine
+        val ring = Store.get(context).alertMode() == Store.MODE_RING
+        val builder = NotificationCompat.Builder(context, if (ring) CHANNEL_ALARM else CHANNEL_REMINDERS)
+            .setSmallIcon(R.drawable.clockin_notification)
+            .setContentTitle(context.getString(R.string.clockin_reminder_notificationTitle))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(!alert)
+            .addAction(0, context.getString(R.string.clockin_reminder_ok), reminderOkIntent(context, groups))
+        if (ring) {
+            // Like the ringing alarm: never `setSilent`, or SystemUI refuses
+            // the full screen; the channel itself has no sound.
+            builder
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setContentIntent(reminderScreenIntent(context, fullScreen = false))
+                .setFullScreenIntent(reminderScreenIntent(context, fullScreen = true), true)
+        } else {
+            builder
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setSilent(true)
+                .setContentIntent(openAppIntent(context))
+        }
+        notify(context, ID_REMINDER, builder.build())
+    }
+
+    /** "Άφιξη: 18:00  Name, …" lines, every name with its own time. */
+    private fun reminderLines(context: Context, items: List<PlanItem>): String {
+        val lines = mutableListOf<String>()
+        val checkIn = Ring.names(items, "in", withTimes = true)
+        val checkOut = Ring.names(items, "out", withTimes = true)
+        if (checkIn.isNotEmpty()) lines += context.getString(R.string.clockin_android_checkInLine, checkIn.joinToString(", "))
+        if (checkOut.isNotEmpty()) lines += context.getString(R.string.clockin_android_checkOutLine, checkOut.joinToString(", "))
+        return lines.joinToString("\n")
     }
 
     /**
@@ -172,10 +260,7 @@ internal object Notifications {
      */
     fun showReminder(context: Context, items: List<PlanItem>, minute: Long) {
         val text = nameLines(context, items)
-        val dnd = context.getSystemService(NotificationManager::class.java)
-            ?.currentInterruptionFilter
-            ?.let { it != NotificationManager.INTERRUPTION_FILTER_ALL && it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN }
-            ?: false
+        val dnd = doNotDisturb(context)
         val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
             .setSmallIcon(R.drawable.clockin_notification)
             .setContentTitle(context.getString(R.string.clockin_alarm_title))

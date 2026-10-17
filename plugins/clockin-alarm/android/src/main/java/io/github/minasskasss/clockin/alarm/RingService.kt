@@ -54,14 +54,19 @@ internal object Ring {
 
     /**
      * «Σταμάτημα»: ends this alarm cycle on this device only. It marks
-     * nobody (SPEC §7.3).
+     * nobody (SPEC §7.3), and starts the «Λείπει σήμανση» reminder for the
+     * names still in it (SPEC §7.6) unless `remind` is false (unpairing).
      */
-    fun stop(context: Context) {
-        synchronized(Store.LOCK) {
+    fun stop(context: Context, remind: Boolean = true) {
+        val now = System.currentTimeMillis()
+        val stopped = synchronized(Store.LOCK) {
             val store = Store.get(context)
-            store.active()?.let { store.markHandled(it.items, System.currentTimeMillis()) }
+            val active = store.active()
+            active?.let { store.markHandled(it.items, now) }
             store.setActive(null)
+            active?.items ?: emptyList()
         }
+        if (remind && stopped.isNotEmpty()) Reminders.start(context, stopped, now)
         Notifications.cancel(context, Notifications.ID_SILENT)
         Notifications.cancel(context, Notifications.ID_RINGING)
         RingService.running?.end()

@@ -169,6 +169,15 @@ pub struct ServerSettings {
     pub autostart: bool,
     /// Null only before `admin_initialize`.
     pub quit_code: Option<QuitCode>,
+    /// Minutes after «Σταμάτημα» before the «Λείπει σήμανση» reminder; 0 =
+    /// off (1.1.0). A server without the 1.1.0 migration, or a snapshot
+    /// cached by 1.0.0, has none: the default then applies.
+    #[serde(default = "default_reminder_min")]
+    pub unmarked_reminder_min: i32,
+}
+
+fn default_reminder_min() -> i32 {
+    clockin_core::DEFAULT_REMINDER_MIN
 }
 
 impl ServerSettings {
@@ -292,6 +301,9 @@ pub struct ServerPlan {
     pub plan_config_version: i64,
     pub horizon_end: Option<Timestamp>,
     pub config_version: i64,
+    /// The reminder setting (1.1.0 servers only).
+    #[serde(default)]
+    pub unmarked_reminder_min: Option<i32>,
     pub items: Vec<PlanItem>,
 }
 
@@ -334,7 +346,7 @@ pub struct OverrideBlockInput {
     pub end: Time,
 }
 
-/// Every setting `settings_update` takes.
+/// Every setting `settings_update_v2` takes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SettingsInput {
     pub checkin_offset_min: i32,
@@ -342,6 +354,7 @@ pub struct SettingsInput {
     pub rollover: Time,
     pub autostart: bool,
     pub quit_code: QuitCode,
+    pub unmarked_reminder_min: i32,
 }
 
 #[derive(Deserialize)]
@@ -792,7 +805,7 @@ impl Api {
     ) -> Result<(), ApiError> {
         let _: OkOnly = self
             .admin_call(
-                "settings_update",
+                "settings_update_v2",
                 secret,
                 session,
                 json!({
@@ -801,6 +814,7 @@ impl Api {
                     "p_rollover": settings.rollover,
                     "p_autostart": settings.autostart,
                     "p_quit_code": settings.quit_code.expose(),
+                    "p_unmarked_reminder_min": settings.unmarked_reminder_min,
                 }),
             )
             .await?;

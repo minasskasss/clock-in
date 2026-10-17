@@ -22,7 +22,8 @@ pub enum RowStatus {
     CheckedIn,
     /// Checked in, past the end time, not marked out (green, amber accent).
     ShouldHaveLeft,
-    /// Marked as left (green, red line through).
+    /// Marked as left (green, red line through), also when the arrival was
+    /// never marked (see [`TodayRow::no_arrival_mark`]).
     Left,
 }
 
@@ -34,6 +35,10 @@ pub struct TodayRow {
     pub status: RowStatus,
     /// The mark a tap on this row asks to make; `None` once the person left.
     pub next_mark: Option<MarkKind>,
+    /// Marked as left without an arrival mark (a departure marked from the
+    /// «Λείπει σήμανση» reminder, SPEC §7.6). The row is a normal «Έφυγε»
+    /// row with a small note.
+    pub no_arrival_mark: bool,
 }
 
 /// The whole Today view.
@@ -81,6 +86,7 @@ pub fn today_view(snapshot: &Snapshot, now: Timestamp) -> TodayView {
             occurrence,
             status,
             next_mark,
+            no_arrival_mark: marked_out && !marked_in,
         }
     })
     .collect();
@@ -187,6 +193,31 @@ mod tests {
         let view = today_view(&snap, athens(MONDAY, 17, 1));
         assert_eq!(view.rows[0].status, RowStatus::Left);
         assert_eq!(view.rows[0].next_mark, None);
+    }
+
+    #[test]
+    fn a_departure_without_an_arrival_is_a_left_row_with_a_note() {
+        let mut snap = snapshot_ab();
+        // Anna was never marked in; her departure was marked from a reminder.
+        snap.marks.push(mark(101, 1, 10, MONDAY, MarkKind::Out));
+        for now in [
+            athens(MONDAY, 8, 0),
+            athens(MONDAY, 12, 0),
+            athens(MONDAY, 17, 30),
+            athens(TUESDAY, 4, 59),
+        ] {
+            let row = &today_view(&snap, now).rows[0];
+            assert_eq!(row.status, RowStatus::Left, "{now}");
+            assert_eq!(row.next_mark, None, "a tap does nothing");
+            assert!(row.no_arrival_mark);
+        }
+        // Rows marked the usual way, and unmarked ones, carry no note.
+        snap.marks.push(mark(100, 2, 20, MONDAY, MarkKind::In));
+        snap.marks.push(mark(102, 2, 20, MONDAY, MarkKind::Out));
+        let view = today_view(&snap, athens(MONDAY, 17, 30));
+        assert_eq!(view.rows[1].status, RowStatus::Left);
+        assert!(!view.rows[1].no_arrival_mark);
+        assert!(!view.rows[2].no_arrival_mark);
     }
 
     #[test]
