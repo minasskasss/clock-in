@@ -779,6 +779,20 @@ mod tests {
     }
 
     #[test]
+    fn the_uploaded_plan_keeps_alarms_that_already_rang() {
+        // Monday 15:00 (Athens): the 12:00 check-in rang 3 hours ago and
+        // stays in the upload, so a phone's alarm or reminder for it keeps
+        // its name (`upload_window`). With a 15-minute look-back it would
+        // be 4 items: 16:00 today, both next Monday, 12:00 the one after.
+        let mut e = engine();
+        let afternoon = ts("2026-10-05T12:00:00Z");
+        block_on(e.tick(afternoon)).unwrap();
+        e.backend().with(|s| {
+            assert_eq!(s.uploads, [(4, plan_window(afternoon).1, 5)]);
+        });
+    }
+
+    #[test]
     fn queued_marks_show_at_once_and_are_flushed_on_the_next_tick() {
         let mut e = engine();
         block_on(e.tick(now())).unwrap();
