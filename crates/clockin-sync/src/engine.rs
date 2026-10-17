@@ -18,7 +18,7 @@ use crate::secret::DeviceSecret;
 use crate::store::{CachedSnapshot, RefusedMark, Store, StoreError};
 use clockin_core::{
     MarkKind, PlanItem, Snapshot, alarm_plan, clock_skew_exceeded, horizon_short,
-    plan_needs_refresh, plan_window, sync_retry_delay,
+    plan_needs_refresh, sync_retry_delay, upload_window,
 };
 use jiff::civil::Date;
 use jiff::{SignedDuration, Timestamp};
@@ -408,7 +408,9 @@ impl<B: SyncBackend> SyncEngine<B> {
                 return Ok(());
             };
             let base = cached.snapshot.config_version;
-            let (from, until) = plan_window(now);
+            // Reaches back a business day, so check_alarm still answers for
+            // alarms that rang (ringing for a while, or reminded about).
+            let (from, until) = upload_window(now, cached.snapshot.settings.rollover);
             let items = alarm_plan(&cached.snapshot.core_snapshot(&[]), from, until);
             match self
                 .backend
@@ -501,7 +503,7 @@ mod tests {
     use super::*;
     use crate::api::{Rejection, ServerSettings};
     use crate::store::StoreKey;
-    use clockin_core::{Staff, WeeklyBlock};
+    use clockin_core::{Staff, WeeklyBlock, plan_window};
     use jiff::civil::{Time, Weekday, date};
     use std::sync::Mutex;
 
@@ -568,6 +570,7 @@ mod tests {
                     rollover: Time::constant(5, 0, 0, 0),
                     autostart: true,
                     quit_code: None,
+                    unmarked_reminder_min: 10,
                 },
                 marks: vec![],
                 devices: vec![],

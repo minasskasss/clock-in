@@ -435,6 +435,7 @@ mod tests {
                 rollover: Time::constant(5, 0, 0, 0),
                 autostart: true,
                 quit_code: None,
+                unmarked_reminder_min: 10,
             },
             marks: vec![],
             devices: vec![],
