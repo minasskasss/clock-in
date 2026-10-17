@@ -12,6 +12,7 @@
 //! - [`due_events`] / [`next_event`]: alarms grouped by minute, suppressed by marks.
 //! - [`ring_cycle_state`]: the ring 5 min / silent 5 min repeat cycle.
 //! - [`AlarmScheduler`]: what the Windows alarm should do right now.
+//! - [`ReminderScheduler`]: the «Λείπει σήμανση» reminder after Stop.
 //! - [`validate_week`] / [`validate_override`]: durations and overlaps.
 //! - [`auto_theme_is_dark`]: the automatic light/dark theme.
 //! - [`record_crash`]: when the Windows restart watcher gives up.
@@ -23,6 +24,7 @@ mod model;
 mod occurrence;
 mod passphrase;
 mod plan;
+mod reminder;
 mod ring;
 mod scheduler;
 mod shop_time;
@@ -55,7 +57,14 @@ pub use passphrase::{
     MIN_WORDS as PASSPHRASE_MIN_WORDS, PassphraseError, check_passphrase, eff_word,
     normalize_passphrase, passphrase_from_indices, same_passphrase,
 };
-pub use plan::{MISSED_ALARM_GRACE, PLAN_HORIZON, PlanItem, alarm_plan, item_id, plan_window};
+pub use plan::{
+    MISSED_ALARM_GRACE, PLAN_HORIZON, PlanItem, alarm_plan, item_id, plan_window, upload_window,
+};
+pub use reminder::{
+    DEFAULT_REMINDER_MIN, MAX_REMINDER_MIN, ReminderGroup, ReminderName, ReminderScheduler,
+    ReminderState, UnmarkedReminder, reminder_at, reminder_cutoff, reminder_cutoffs,
+    reminder_delay, reminders_due,
+};
 pub use ring::{RING_DURATION, RingPhase, SILENT_DURATION, ring_cycle_state};
 pub use scheduler::{AlarmKey, AlarmScheduler, AlarmState, MAX_SLEEP, RingingAlarm};
 pub use shop_time::{
